@@ -24,7 +24,6 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executor;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 
@@ -49,6 +48,7 @@ public abstract class ServiceProxy {
     }
 
     private final Map<Integer, Map<Integer, Function<byte[], CompletionStage<byte[]>>>> implementations = new HashMap<>();
+    private final MethodHandles.Lookup                                                  lookup          = MethodHandles.lookup();
 
     @SuppressWarnings("unchecked")
     public void registerService(Class<?> serviceInterface, Object implementation) {
@@ -142,6 +142,8 @@ public abstract class ServiceProxy {
                 methods.put(methodIdentifier, func);
             } catch (NoSuchMethodException e) {
                 throw new Proto4jProxyingException(clazz.getSimpleName() + "#" + m.getName() + " is not present");
+            } catch (Exception e) {
+                throw new Proto4jProxyingException(clazz.getSimpleName() + "#" + m.getName() + " can't be proxied", e);
             }
         }
         this.implementations.put(serviceIdentifier, methods);
@@ -289,8 +291,7 @@ public abstract class ServiceProxy {
                     .in(proxyClass)
                     .unreflectSpecial(method, proxyClass);
         }
-        return MethodHandles.lookup()
-                .findSpecial(
+        return this.lookup.findSpecial(
                         proxyClass,
                         method.getName(),
                         MethodType.methodType(void.class, new Class[0]),
@@ -298,8 +299,15 @@ public abstract class ServiceProxy {
                 );
     }
 
-    private Function<Object[], Object> getMethodInvocation(Method method) {
-        return null;
+    private Function<Object[], Object> getMethodInvocation(Method method) throws Exception {
+        MethodHandle handle = this.lookup.unreflect(method);
+        return args -> {
+            try {
+                return handle.invokeWithArguments(args);
+            } catch (Throwable throwable) {
+                throw new Proto4jProxyingException("Could not invoke method " + method.getName(), throwable);
+            }
+        };
     }
 
     @FunctionalInterface

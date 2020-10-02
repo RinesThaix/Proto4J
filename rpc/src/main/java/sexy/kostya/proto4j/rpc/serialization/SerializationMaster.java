@@ -90,10 +90,11 @@ public class SerializationMaster {
             Class                      elType   = clazz.getComponentType();
             BiConsumer<Buffer, Object> elWriter = getWriter(elType);
             return (buffer, val) -> {
-                int size = Array.getLength(val);
+                Object[] casted = (Object[]) val;
+                int      size   = casted.length;
                 buffer.writeVarInt(size);
                 for (int i = 0; i < size; ++i) {
-                    elWriter.accept(buffer, Array.get(val, i));
+                    elWriter.accept(buffer, casted[i]);
                 }
             };
         }
@@ -152,10 +153,11 @@ public class SerializationMaster {
             Class                    elType   = clazz.getComponentType();
             Function<Buffer, Object> elReader = getReader(elType);
             return buffer -> {
-                int    size  = buffer.readVarInt();
-                Object array = Array.newInstance(elType, size);
+                int      size   = buffer.readVarInt();
+                Object   array  = Array.newInstance(elType, size);
+                Object[] casted = (Object[]) array;
                 for (int i = 0; i < size; ++i) {
-                    Array.set(array, i, elReader.apply(buffer));
+                    casted[i] = elReader.apply(buffer);
                 }
                 return (T) array;
             };

@@ -48,7 +48,6 @@ public abstract class Proto4jServer<C extends Channel> extends Proto4jSocket<C> 
                     super.socket.receive(packet);
                     getWorkers().execute(() -> {
                         ByteBuf buffer = Unpooled.wrappedBuffer(packet.getData(), packet.getOffset(), packet.getLength());
-//                            DatagramHelper.log("C -> S: ", buffer);
                         this.channel.get(new InetSocketAddress(packet.getAddress(), packet.getPort())).recv(Buffer.wrap(buffer));
                     });
                 }
