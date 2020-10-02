@@ -30,7 +30,7 @@ public class Handshake {
                 throw new Proto4jHandshakingException("Handshaking time not stored in channel attributes");
             }
             if (second != clientTime) {
-                throw new Proto4jHandshakingException("Handshaking time does not match");
+                throw new Proto4jHandshakingException("Handshaking time does not match: " + second + " vs " + clientTime);
             }
             long serverTime = in.readLong();
             channel.getAttributes().set(ATTRIBUTE_KEY, serverTime);
@@ -45,7 +45,7 @@ public class Handshake {
                 throw new Proto4jHandshakingException("Handshaking time not stored in channel attributes");
             }
             if (first != serverTime) {
-                throw new Proto4jHandshakingException("Handshaking time does not match");
+                throw new Proto4jHandshakingException("Handshaking time does not match: " + first + " vs " + serverTime);
             }
             return true;
         } else {
@@ -71,7 +71,7 @@ public class Handshake {
                 throw new Proto4jHandshakingException("Handshaking time not stored in channel attributes");
             }
             if (first != serverTime) {
-                throw new Proto4jHandshakingException("Handshaking time does not match");
+                throw new Proto4jHandshakingException("Handshaking time does not match: " + first + " vs " + serverTime);
             }
             Buffer out = Buffer.newBuffer(16);
             out.writeLong(serverTime);

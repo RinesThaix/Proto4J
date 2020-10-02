@@ -10,6 +10,7 @@ import sexy.kostya.proto4j.transport.highlevel.packet.def.DefaultPacketManager;
 import sexy.kostya.proto4j.transport.highlevel.packet.def.Packet1Ping;
 import sexy.kostya.proto4j.transport.highlevel.packet.def.Packet2Disconnect;
 import sexy.kostya.proto4j.transport.lowlevel.Proto4jClient;
+import sexy.kostya.proto4j.transport.packet.Proto4jPacket;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
@@ -44,7 +45,7 @@ public abstract class Proto4jHighClient<C extends HighChannel> extends Proto4jCl
                             } else {
                                 getLogger().info("Disconnected by server: {}", casted.getReason());
                             }
-                            stop();
+                            super.stop();
                             break;
                         }
                         default:
@@ -102,6 +103,12 @@ public abstract class Proto4jHighClient<C extends HighChannel> extends Proto4jCl
     }
 
     @Override
+    public void stop() {
+        getChannel().send(new Packet2Disconnect(), Proto4jPacket.Flag.UNRELIABLE);
+        super.stop();
+    }
+
+    @Override
     protected boolean stop0() {
         if (!super.stop0()) {
             return false;
@@ -111,6 +118,10 @@ public abstract class Proto4jHighClient<C extends HighChannel> extends Proto4jCl
                 this.handshakingFuture.completeExceptionally(new Exception("Disconnected"));
             }
             this.handshakingFuture = null;
+        }
+        C channel = getChannel();
+        if (channel != null) {
+            channel.active = false;
         }
         return true;
     }

@@ -50,4 +50,23 @@ public class TestServiceImpl implements TestService {
         }
         return result;
     }
+
+    @Override
+    public long[] plusOne(long[] in) {
+        for (int i = 0; i < in.length; ++i) {
+            in[i]++;
+        }
+        return in;
+    }
+
+    @Override
+    public void broadcastTest() {
+        this.value.set(-1);
+    }
+
+    @Override
+    public CompletionStage<Void> broadcastTest(boolean val) {
+        this.value.set(-2);
+        return CompletableFuture.completedFuture(null);
+    }
 }

@@ -2,6 +2,7 @@ package sexy.kostya.proto4j.rpc.service;
 
 import com.google.common.primitives.Primitives;
 import sexy.kostya.proto4j.exception.Proto4jProxyingException;
+import sexy.kostya.proto4j.rpc.annotation.Broadcast;
 import sexy.kostya.proto4j.rpc.annotation.Index;
 import sexy.kostya.proto4j.rpc.annotation.MethodIdentifier;
 import sexy.kostya.proto4j.rpc.annotation.Proto4jService;
@@ -17,10 +18,7 @@ import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.lang.reflect.*;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
@@ -72,7 +70,7 @@ public abstract class InternalServiceManagerImpl implements InternalServiceManag
                 continue;
             }
             try {
-                Method method         = clazz.getDeclaredMethod(m.getName(), m.getParameterTypes());
+                Method method         = serviceInterface.getDeclaredMethod(m.getName(), m.getParameterTypes());
                 Type   returnType     = method.getGenericReturnType();
                 Type[] parameterTypes = method.getGenericParameterTypes();
                 int    methodIdentifier;
@@ -83,7 +81,7 @@ public abstract class InternalServiceManagerImpl implements InternalServiceManag
                     }
                     methodIdentifier = methodAnnotation.value();
                 } else {
-                    methodIdentifier = method.getName().hashCode();
+                    methodIdentifier = hash(method);
                 }
                 Function[] readers = new Function[parameterTypes.length];
                 for (int i = 0; i < parameterTypes.length; ++i) {
@@ -96,7 +94,7 @@ public abstract class InternalServiceManagerImpl implements InternalServiceManag
                         invocation.apply(deserializeArguments(bytes, readers));
                         return null;
                     };
-                } else if (returnType instanceof ParameterizedType && ((ParameterizedType) returnType).getRawType() == CompletionStage.class) {
+                } else if (isVoidCompletionStage(returnType)) {
                     returnType = ((ParameterizedType) returnType).getActualTypeArguments()[0];
                     BiConsumer<Buffer, Object> writer = SerializationMaster.getWriter(returnType);
                     func = bytes -> {
@@ -181,12 +179,13 @@ public abstract class InternalServiceManagerImpl implements InternalServiceManag
         Proto4jService annotation        = clazz.getAnnotation(Proto4jService.class);
         int            serviceIdentifier = annotation.explicitIdentifier() != 0 ? annotation.explicitIdentifier() : clazz.getSimpleName().hashCode();
 
-        Map<Method, CheckedFunction<Object[], Object>> methods           = new ConcurrentHashMap<>();
+        Map<Integer, CheckedFunction<Object[], Object>> methods           = new ConcurrentHashMap<>();
         Set<Integer>                                   methodIdentifiers = new HashSet<>();
 
-        return (S) Proxy.newProxyInstance(clazz.getClassLoader(), new Class[]{clazz}, (proxy, passedMethod, passedArgs) -> {
+        return (S) Proxy.newProxyInstance(clazz.getClassLoader(), new Class[]{clazz}, (proxy, method, passedArgs) -> {
+            int hash = hash(method);
             //noinspection CodeBlock2Expr
-            return methods.computeIfAbsent(passedMethod, method -> {
+            return methods.computeIfAbsent(hash, h -> {
                 if (method.isDefault()) {
                     try {
                         MethodHandle handle = getTrustedHandleForMethod(clazz, method).bindTo(proxy);
@@ -205,7 +204,7 @@ public abstract class InternalServiceManagerImpl implements InternalServiceManag
                     }
                     methodIdentifier = methodAnnotation.value();
                 } else {
-                    methodIdentifier = method.getName().hashCode();
+                    methodIdentifier = hash;
                 }
                 if (!methodIdentifiers.add(methodIdentifier)) {
                     throw new Proto4jProxyingException("Identifier for " + clazz.getSimpleName() + "#" + method.getName() + " duplicates with identifier of another method");
@@ -221,6 +220,13 @@ public abstract class InternalServiceManagerImpl implements InternalServiceManag
                     }
                 }
 
+                boolean broadcast = method.isAnnotationPresent(Broadcast.class);
+                if (broadcast) {
+                    if (returnType != void.class && !isVoidCompletionStage(returnType)) {
+                        throw new Proto4jProxyingException("Method " + clazz.getSimpleName() + "#" + method.getName() + " is marked with @Broadcast: it must return void or CompletionStage<Void>");
+                    }
+                }
+
                 BiConsumer[] writers = new BiConsumer[parameterTypes.length];
                 for (int i = 0; i < parameterTypes.length; ++i) {
                     writers[i] = SerializationMaster.getWriter(parameterTypes[i]);
@@ -228,17 +234,17 @@ public abstract class InternalServiceManagerImpl implements InternalServiceManag
                 if (returnType == void.class) {
                     return args -> {
                         byte[]              arguments = serializeArguments(args, writers);
-                        RpcInvocationPacket packet    = new RpcInvocationPacket(serviceIdentifier, methodIdentifier, calculateIndex(indexParams, args), arguments);
+                        RpcInvocationPacket packet    = new RpcInvocationPacket(serviceIdentifier, methodIdentifier, calculateIndex(indexParams, args), broadcast, arguments);
                         send(packet);
                         return null;
                     };
-                } else if (returnType instanceof ParameterizedType && ((ParameterizedType) returnType).getRawType() == CompletionStage.class) {
+                } else if (isVoidCompletionStage(returnType)) {
                     returnType = ((ParameterizedType) returnType).getActualTypeArguments()[0];
                     Function<Buffer, Object> reader = SerializationMaster.getReader(returnType);
                     return args -> {
                         CompletableFuture   future    = new CompletableFuture();
                         byte[]              arguments = serializeArguments(args, writers);
-                        RpcInvocationPacket packet    = new RpcInvocationPacket(serviceIdentifier, methodIdentifier, calculateIndex(indexParams, args), arguments);
+                        RpcInvocationPacket packet    = new RpcInvocationPacket(serviceIdentifier, methodIdentifier, calculateIndex(indexParams, args), broadcast, arguments);
 
                         CompletionStage<RpcResponsePacket> resultFuture = sendWithCallback(packet);
                         resultFuture.whenComplete((p, ex) -> {
@@ -256,7 +262,7 @@ public abstract class InternalServiceManagerImpl implements InternalServiceManag
                     Function<Buffer, Object> reader = SerializationMaster.getReader(returnType);
                     return args -> {
                         byte[]              arguments = serializeArguments(args, writers);
-                        RpcInvocationPacket packet    = new RpcInvocationPacket(serviceIdentifier, methodIdentifier, calculateIndex(indexParams, args), arguments);
+                        RpcInvocationPacket packet    = new RpcInvocationPacket(serviceIdentifier, methodIdentifier, calculateIndex(indexParams, args), broadcast, arguments);
 
                         CompletionStage<RpcResponsePacket> resultFuture = sendWithCallback(packet);
                         RpcResponsePacket                  callback     = resultFuture.toCompletableFuture().get();
@@ -312,6 +318,14 @@ public abstract class InternalServiceManagerImpl implements InternalServiceManag
             result = 31 * result + (el == null ? 0 : el.hashCode());
         }
         return result;
+    }
+
+    private boolean isVoidCompletionStage(Type type) {
+        return type instanceof ParameterizedType && ((ParameterizedType) type).getRawType() == CompletionStage.class;
+    }
+
+    private int hash(Method method) {
+        return method.hashCode() + 31 * Objects.hash((Object[]) method.getParameterTypes());
     }
 
     private MethodHandle getTrustedHandleForMethod(Class<?> proxyClass, Method method) throws Exception {

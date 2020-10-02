@@ -1,5 +1,6 @@
 package sexy.kostya.proto4j.rpc;
 
+import sexy.kostya.proto4j.rpc.annotation.Broadcast;
 import sexy.kostya.proto4j.rpc.annotation.Proto4jService;
 
 import java.util.List;
@@ -22,5 +23,13 @@ public interface TestService {
     int sumArray(int[] array);
 
     int sumList(List<Integer> array);
+
+    long[] plusOne(long[] in);
+
+    @Broadcast
+    void broadcastTest();
+
+    @Broadcast
+    CompletionStage<Void> broadcastTest(boolean val);
 
 }

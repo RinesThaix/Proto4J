@@ -19,7 +19,7 @@ public abstract class BaseServiceManager extends InternalServiceManagerImpl {
         } else {
             HighChannel channel = getChannel(packet);
             if (channel == null || !channel.isActive()) {
-                throw new NullPointerException("Could not find implementation for service #2");
+                throw new NullPointerException("Could not find implementation for service");
             }
             channel.send(packet);
         }
@@ -32,7 +32,7 @@ public abstract class BaseServiceManager extends InternalServiceManagerImpl {
         } else {
             HighChannel channel = getChannel(packet);
             if (channel == null || !channel.isActive()) {
-                return CompletableFuture.completedFuture(new RpcResponsePacket("Could not find implementation for service #3", null));
+                return CompletableFuture.completedFuture(new RpcResponsePacket("Could not find implementation for service", null));
             }
             return channel.sendWithCallback(packet).thenApply(p -> (RpcResponsePacket) p);
         }

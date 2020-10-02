@@ -10,6 +10,7 @@ import sexy.kostya.proto4j.transport.highlevel.packet.def.DefaultPacketManager;
 import sexy.kostya.proto4j.transport.highlevel.packet.def.Packet1Ping;
 import sexy.kostya.proto4j.transport.highlevel.packet.def.Packet2Disconnect;
 import sexy.kostya.proto4j.transport.lowlevel.Proto4jServer;
+import sexy.kostya.proto4j.transport.packet.Proto4jPacket;
 
 import java.net.InetSocketAddress;
 import java.util.HashSet;
@@ -39,7 +40,7 @@ public abstract class Proto4jHighServer<C extends HighChannel> extends Proto4jSe
                             // nothing is here
                             break;
                         case Packet2Disconnect.ID:
-                            // not handling it on server side
+                            disconnect(channel, false, null, null);
                             break;
                         default:
                             if (enumeratedPacket instanceof CallbackProto4jPacket) {
@@ -64,14 +65,12 @@ public abstract class Proto4jHighServer<C extends HighChannel> extends Proto4jSe
             Set<InetSocketAddress> toBeRemoved = new HashSet<>();
             while (true) {
                 long current = System.currentTimeMillis();
-                super.channel.getAll().forEach((addr, channel) -> {
+                super.channel.getAll().values().forEach(channel -> {
                     if (!channel.isHandshaked()) {
                         return;
                     }
                     if (current - channel.getLastPacketReceived() > 10_000L) {
-                        channel.send(new Packet2Disconnect("Timed out"));
-                        channel.active = false;
-                        toBeRemoved.add(addr);
+                        disconnect(channel, true, "Timed out", toBeRemoved);
                         return;
                     }
                     if (current - channel.getLastPacketReceived() > 1_000L || current - channel.getLastPacketSent() > 1_000L) {
@@ -133,11 +132,36 @@ public abstract class Proto4jHighServer<C extends HighChannel> extends Proto4jSe
     }
 
     @Override
+    public void stop() {
+        super.channel.getAll().values().forEach(channel -> channel.send(new Packet2Disconnect("Server is stopping"), Proto4jPacket.Flag.UNRELIABLE));
+        super.stop();
+    }
+
+    @Override
     protected boolean stop0() {
         if (!super.stop0()) {
             return false;
         }
         super.channel.clear();
         return true;
+    }
+
+    public void disconnect(C channel, String reason) {
+        disconnect(channel, true, reason, null);
+    }
+
+    private void disconnect(C channel, boolean callback, String reason, Set<InetSocketAddress> toBeRemoved) {
+        if (this.onDisconnect != null) {
+            this.onDisconnect.accept(channel);
+        }
+        if (callback) {
+            channel.send(new Packet2Disconnect(reason));
+        }
+        channel.active = false;
+        if (toBeRemoved != null) {
+            toBeRemoved.add(channel.getCodec().getAddress());
+        } else {
+            super.channel.remove(channel.getCodec().getAddress());
+        }
     }
 }

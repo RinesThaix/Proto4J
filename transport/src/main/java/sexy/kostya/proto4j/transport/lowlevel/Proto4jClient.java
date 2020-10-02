@@ -62,7 +62,11 @@ public abstract class Proto4jClient<C extends Channel> extends Proto4jSocket<C> 
                             getLogger().warn("Received packet from an unknown address: {}", addr);
                             return;
                         }
-                        this.channel.recv(Buffer.wrap(buffer));
+                        try {
+                            this.channel.recv(Buffer.wrap(buffer));
+                        } catch (Throwable ignored) {
+
+                        }
                     });
                 }
             } catch (IOException e) {

@@ -51,4 +51,8 @@ public class Channel {
         this.codec.getEncoder().write(packet);
     }
 
+    public PacketCodec getCodec() {
+        return this.codec;
+    }
+
 }
