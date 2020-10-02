@@ -4,7 +4,6 @@ import sexy.kostya.proto4j.transport.buffer.Buffer;
 import sexy.kostya.proto4j.transport.highlevel.base.BaseProto4jHighClient;
 import sexy.kostya.proto4j.transport.highlevel.base.BaseProto4jHighServer;
 import sexy.kostya.proto4j.transport.highlevel.packet.CallbackProto4jPacket;
-import sexy.kostya.proto4j.transport.highlevel.packet.EnumeratedProto4jPacket;
 import sexy.kostya.proto4j.transport.highlevel.packet.PacketManager;
 
 import java.util.concurrent.ExecutionException;
@@ -22,12 +21,12 @@ public class TheTest {
             packet.value = "Hello there!";
             packet.respond(channel, packet);
         });
-        server.start(6775).get();
+        server.start(6775).toCompletableFuture().get();
 
         BaseProto4jHighClient client = new BaseProto4jHighClient(3, 3);
         setupPacketManager(client.getPacketManager());
-        client.connect("127.0.0.1", 6775).get();
-        TestPacket packet = (TestPacket) client.getChannel().sendWithCallback(new TestPacket("Hello!")).get();
+        client.connect("127.0.0.1", 6775).toCompletableFuture().get();
+        TestPacket packet = (TestPacket) client.getChannel().sendWithCallback(new TestPacket("Hello!")).toCompletableFuture().get();
         System.out.println("S -> C: " + packet.value);
     }
 

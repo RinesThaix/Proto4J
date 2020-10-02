@@ -31,7 +31,7 @@ public abstract class CallbackProto4jPacket extends EnumeratedProto4jPacket {
     }
 
     public void respond(HighChannel channel, CallbackProto4jPacket packet) {
-        packet.setCallbackID((short)-this.callbackID);
+        packet.setCallbackID((short) -this.callbackID);
         channel.send(packet);
     }
 

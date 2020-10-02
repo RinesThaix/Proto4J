@@ -132,7 +132,7 @@ public interface Buffer extends AutoCloseable {
 
     default String readString() {
         int length;
-        int lengthByte = ((int)readByte()) & 0xff;
+        int lengthByte = ((int) readByte()) & 0xff;
         if (lengthByte <= 253) {
             length = lengthByte;
         } else if (lengthByte == 255) {
@@ -149,7 +149,7 @@ public interface Buffer extends AutoCloseable {
         }
         byte[] result = new byte[length];
         readBytes(result);
-        int    padding = getStringPadding(length);
+        int padding = getStringPadding(length);
         if (padding > 0) {
             skip(padding);
         }
@@ -219,8 +219,8 @@ public interface Buffer extends AutoCloseable {
     }
 
     default <T, C extends Collection<T>> C readCollection(Function<Integer, C> generator, Supplier<T> reader) {
-        int size = readVarInt();
-        C collection = generator.apply(size);
+        int size       = readVarInt();
+        C   collection = generator.apply(size);
         for (int i = 0; i < size; ++i) {
             collection.add(reader.get());
         }
@@ -243,7 +243,7 @@ public interface Buffer extends AutoCloseable {
 
     default <K, V, M extends Map<K, V>> M readMap(Function<Integer, M> generator, Supplier<K> keyReader, Supplier<V> valueReader) {
         int size = readVarInt();
-        M map = generator.apply(size);
+        M   map  = generator.apply(size);
         for (int i = 0; i < size; ++i) {
             map.put(keyReader.get(), valueReader.get());
         }

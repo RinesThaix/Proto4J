@@ -41,8 +41,8 @@ public class DatagramHelper {
     }
 
     public static void log(String prefix, ByteBuf buffer) {
-        StringBuilder sb = new StringBuilder();
-        int index = buffer.readerIndex();
+        StringBuilder sb    = new StringBuilder();
+        int           index = buffer.readerIndex();
         while (buffer.readableBytes() > 0) {
             sb.append(String.format("0x%02X ", buffer.readByte()));
         }

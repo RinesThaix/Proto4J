@@ -1,10 +1,5 @@
 package sexy.kostya.proto4j.rpc;
 
-import com.google.common.util.concurrent.FutureCallback;
-import com.google.common.util.concurrent.Futures;
-import com.google.common.util.concurrent.ListenableFuture;
-import com.google.common.util.concurrent.SettableFuture;
-import org.checkerframework.checker.nullness.qual.Nullable;
 import sexy.kostya.proto4j.exception.Proto4jProxyingException;
 import sexy.kostya.proto4j.rpc.annotation.MethodIdentifier;
 import sexy.kostya.proto4j.rpc.annotation.Proto4jService;
@@ -21,12 +16,13 @@ import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
 import java.lang.reflect.Proxy;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.function.BiConsumer;
@@ -52,7 +48,7 @@ public abstract class ServiceProxy {
         return Integer.parseInt(version);
     }
 
-    private final Map<Integer, Map<Integer, Function<byte[], ListenableFuture<byte[]>>>> implementations = new HashMap<>();
+    private final Map<Integer, Map<Integer, Function<byte[], CompletionStage<byte[]>>>> implementations = new HashMap<>();
 
     @SuppressWarnings("unchecked")
     public void registerService(Class<?> serviceInterface, Object implementation) {
@@ -66,15 +62,15 @@ public abstract class ServiceProxy {
         if (!serviceInterface.isAnnotationPresent(Proto4jService.class)) {
             throw new Proto4jProxyingException(serviceInterface.getSimpleName() + " is not a Proto4jService");
         }
-        Proto4jService annotation        = clazz.getAnnotation(Proto4jService.class);
-        int            serviceIdentifier = annotation.explicitIdentifier() != 0 ? annotation.explicitIdentifier() : clazz.getSimpleName().hashCode();
-        Map<Integer, Function<byte[], ListenableFuture<byte[]>>> methods = new HashMap<>();
+        Proto4jService                                          annotation        = clazz.getAnnotation(Proto4jService.class);
+        int                                                     serviceIdentifier = annotation.explicitIdentifier() != 0 ? annotation.explicitIdentifier() : clazz.getSimpleName().hashCode();
+        Map<Integer, Function<byte[], CompletionStage<byte[]>>> methods           = new HashMap<>();
         for (Method m : serviceInterface.getDeclaredMethods()) {
             if (m.isDefault()) {
                 continue;
             }
             try {
-                Method method = clazz.getDeclaredMethod(m.getName(), m.getParameterTypes());
+                Method  method         = clazz.getDeclaredMethod(m.getName(), m.getParameterTypes());
                 Class   returnType     = method.getReturnType();
                 Class[] parameterTypes = method.getParameterTypes();
                 int     methodIdentifier;
@@ -91,8 +87,8 @@ public abstract class ServiceProxy {
                 for (int i = 0; i < parameterTypes.length; ++i) {
                     readers[i] = SerializationMaster.getReader(parameterTypes[i]);
                 }
-                Function<Object[], Object> invocation = getMethodInvocation(method);
-                Function<byte[], ListenableFuture<byte[]>> func;
+                Function<Object[], Object>                invocation = getMethodInvocation(method);
+                Function<byte[], CompletionStage<byte[]>> func;
                 if (returnType == void.class) {
                     func = bytes -> {
                         try (Buffer buffer = Buffer.wrap(bytes)) {
@@ -104,7 +100,7 @@ public abstract class ServiceProxy {
                             return null;
                         }
                     };
-                } else if (ListenableFuture.class.isAssignableFrom(returnType)) {
+                } else if (CompletionStage.class.isAssignableFrom(returnType)) {
                     returnType = (Class) returnType.getGenericInterfaces()[0];
                     BiConsumer<Buffer, Object> writer = SerializationMaster.getWriter(returnType);
                     func = bytes -> {
@@ -113,22 +109,18 @@ public abstract class ServiceProxy {
                             for (int i = 0; i < args.length; ++i) {
                                 args[i] = readers[i].apply(buffer);
                             }
-                            ListenableFuture future = (ListenableFuture) invocation.apply(args);
-                            SettableFuture<byte[]> result = SettableFuture.create();
-                            Futures.addCallback(future, new FutureCallback<Object>() {
-                                @Override
-                                public void onSuccess(@Nullable Object o) {
-                                    try (Buffer buffer = Buffer.newBuffer()) {
-                                        writer.accept(buffer, o);
-                                        result.set(((BufferImpl) buffer).getHandle().array());
+                            CompletionStage<?>        future = (CompletionStage<?>) invocation.apply(args);
+                            CompletableFuture<byte[]> result = new CompletableFuture<>();
+                            future.whenComplete((o, ex) -> {
+                                if (ex == null) {
+                                    try (Buffer buf = Buffer.newBuffer()) {
+                                        writer.accept(buf, o);
+                                        result.complete(((BufferImpl) buf).getHandle().array());
                                     }
+                                } else {
+                                    result.completeExceptionally(ex);
                                 }
-
-                                @Override
-                                public void onFailure(Throwable throwable) {
-                                    result.setException(throwable);
-                                }
-                            }, getExecutor());
+                            });
                             return result;
                         }
                     };
@@ -142,9 +134,7 @@ public abstract class ServiceProxy {
                             }
                             try (Buffer buffer2 = Buffer.newBuffer()) {
                                 writer.accept(buffer2, invocation.apply(args));
-                                SettableFuture<byte[]> result = SettableFuture.create();
-                                result.set(((BufferImpl) buffer2).getHandle().array());
-                                return result;
+                                return CompletableFuture.completedFuture(((BufferImpl) buffer2).getHandle().array());
                             }
                         }
                     };
@@ -158,31 +148,27 @@ public abstract class ServiceProxy {
     }
 
     public void process(HighChannel channel, RpcInvocationPacket packet) {
-        Map<Integer, Function<byte[], ListenableFuture<byte[]>>> implementation = this.implementations.get(packet.getServiceID());
+        Map<Integer, Function<byte[], CompletionStage<byte[]>>> implementation = this.implementations.get(packet.getServiceID());
         if (implementation == null) {
             packet.respond(channel, new RpcResponsePacket("Unknown implementation error", null));
             return;
         }
-        Function<byte[], ListenableFuture<byte[]>> method = implementation.get(packet.getMethodID());
+        Function<byte[], CompletionStage<byte[]>> method = implementation.get(packet.getMethodID());
         if (method == null) {
             packet.respond(channel, new RpcResponsePacket("Unknown method error", null));
             return;
         }
-        ListenableFuture<byte[]> future = method.apply(packet.getArguments());
+        CompletionStage<byte[]> future = method.apply(packet.getArguments());
         if (future == null) {
             return;
         }
-        Futures.addCallback(future, new FutureCallback<byte[]>() {
-            @Override
-            public void onSuccess(byte[] bytes) {
+        future.whenComplete((bytes, ex) -> {
+            if (ex == null) {
                 packet.respond(channel, new RpcResponsePacket(null, bytes));
+            } else {
+                packet.respond(channel, new RpcResponsePacket(ex.getMessage(), null));
             }
-
-            @Override
-            public void onFailure(Throwable throwable) {
-                packet.respond(channel, new RpcResponsePacket(throwable.getMessage(), null));
-            }
-        }, getExecutor());
+        });
     }
 
     @SuppressWarnings("unchecked")
@@ -237,32 +223,24 @@ public abstract class ServiceProxy {
                         send(packet);
                         return null;
                     };
-                } else if (ListenableFuture.class.isAssignableFrom(returnType)) {
+                } else if (CompletionStage.class.isAssignableFrom(returnType)) {
                     Function<Buffer, Object> reader = SerializationMaster.getReader(returnType);
                     return args -> {
-                        SettableFuture      future    = SettableFuture.create();
+                        CompletableFuture   future    = new CompletableFuture();
                         byte[]              arguments = serializeArguments(args, writers);
                         RpcInvocationPacket packet    = new RpcInvocationPacket(serviceIdentifier, methodIdentifier, arguments);
 
-                        ListenableFuture<CallbackProto4jPacket> resultFuture = sendWithCallback(packet);
-                        Futures.addCallback(resultFuture, new FutureCallback<CallbackProto4jPacket>() {
-                            @Override
-                            public void onSuccess(@Nullable CallbackProto4jPacket callbackProto4jPacket) {
-                                RpcResponsePacket callback = (RpcResponsePacket) callbackProto4jPacket;
-                                if (callback.getError() != null) {
-                                    future.setException(new Exception(callback.getError()));
-                                } else {
-                                    try (Buffer buffer = Buffer.wrap(callback.getResponse())) {
-                                        future.set(reader.apply(buffer));
-                                    }
+                        CompletionStage<CallbackProto4jPacket> resultFuture = sendWithCallback(packet);
+                        resultFuture.whenComplete((p, ex) -> {
+                            RpcResponsePacket callback = (RpcResponsePacket) p;
+                            if (ex == null) {
+                                try (Buffer buffer = Buffer.wrap(callback.getResponse())) {
+                                    future.complete(reader.apply(buffer));
                                 }
+                            } else {
+                                future.completeExceptionally(new Exception(callback.getError()));
                             }
-
-                            @Override
-                            public void onFailure(Throwable throwable) {
-                                future.setException(throwable);
-                            }
-                        }, getExecutor());
+                        });
                         return future;
                     };
                 } else {
@@ -271,8 +249,8 @@ public abstract class ServiceProxy {
                         byte[]              arguments = serializeArguments(args, writers);
                         RpcInvocationPacket packet    = new RpcInvocationPacket(serviceIdentifier, methodIdentifier, arguments);
 
-                        ListenableFuture<CallbackProto4jPacket> resultFuture = sendWithCallback(packet);
-                        RpcResponsePacket                       callback     = (RpcResponsePacket) resultFuture.get();
+                        CompletionStage<CallbackProto4jPacket> resultFuture = sendWithCallback(packet);
+                        RpcResponsePacket                      callback     = (RpcResponsePacket) resultFuture.toCompletableFuture().get();
                         if (callback.getError() != null) {
                             throw new Exception(callback.getError());
                         } else {
@@ -286,11 +264,9 @@ public abstract class ServiceProxy {
         });
     }
 
-    public abstract Executor getExecutor();
-
     public abstract void send(RpcInvocationPacket packet);
 
-    public abstract ListenableFuture<CallbackProto4jPacket> sendWithCallback(RpcInvocationPacket packet);
+    public abstract CompletionStage<CallbackProto4jPacket> sendWithCallback(RpcInvocationPacket packet);
 
     @SuppressWarnings("unchecked")
     private byte[] serializeArguments(Object[] args, BiConsumer[] writers) {

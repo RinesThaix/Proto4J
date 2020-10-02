@@ -1,6 +1,5 @@
 package sexy.kostya.proto4j.rpc.transport;
 
-import com.google.common.util.concurrent.ListenableFuture;
 import org.slf4j.LoggerFactory;
 import sexy.kostya.proto4j.rpc.ServiceProxy;
 import sexy.kostya.proto4j.rpc.transport.packet.RpcInvocationPacket;
@@ -9,6 +8,7 @@ import sexy.kostya.proto4j.transport.highlevel.base.BaseProto4jHighClient;
 import sexy.kostya.proto4j.transport.highlevel.packet.CallbackProto4jPacket;
 import sexy.kostya.proto4j.transport.highlevel.packet.PacketHandler;
 
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Executor;
 
 /**
@@ -32,10 +32,6 @@ public class RpcClient extends BaseProto4jHighClient {
         });
 
         this.proxy = new ServiceProxy() {
-            @Override
-            public Executor getExecutor() {
-                return getHandlers();
-            }
 
             @Override
             public void send(RpcInvocationPacket packet) {
@@ -43,7 +39,7 @@ public class RpcClient extends BaseProto4jHighClient {
             }
 
             @Override
-            public ListenableFuture<CallbackProto4jPacket> sendWithCallback(RpcInvocationPacket packet) {
+            public CompletionStage<CallbackProto4jPacket> sendWithCallback(RpcInvocationPacket packet) {
                 return getChannel().sendWithCallback(packet);
             }
         };

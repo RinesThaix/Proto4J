@@ -1,10 +1,5 @@
 package sexy.kostya.proto4j.transport.highlevel;
 
-import com.google.common.util.concurrent.FutureCallback;
-import com.google.common.util.concurrent.Futures;
-import com.google.common.util.concurrent.ListenableFuture;
-import com.google.common.util.concurrent.SettableFuture;
-import org.checkerframework.checker.nullness.qual.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sexy.kostya.proto4j.transport.highlevel.packet.CallbackProto4jPacket;
@@ -16,6 +11,9 @@ import sexy.kostya.proto4j.transport.highlevel.packet.def.Packet1Ping;
 import sexy.kostya.proto4j.transport.highlevel.packet.def.Packet2Disconnect;
 import sexy.kostya.proto4j.transport.lowlevel.Proto4jClient;
 
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
+
 /**
  * Created by k.shandurenko on 01.10.2020
  */
@@ -25,14 +23,14 @@ public abstract class Proto4jHighClient<C extends HighChannel> extends Proto4jCl
     private       PacketHandler<C>  packetHandler     = new PacketHandler<>();
     private final CallbacksRegistry callbacksRegistry = new CallbacksRegistry();
 
-    private SettableFuture<Void> handshakingFuture;
+    private CompletableFuture<Void> handshakingFuture;
 
     public Proto4jHighClient(Logger logger, int workerThreads, int handlerThreads) {
         super(logger, workerThreads, handlerThreads);
         super.setInitialPacketHandler((channel, packet) -> {
             if (Handshake.processOnClientside(channel, packet.getBuffer())) {
                 channel.handshaked = true;
-                this.handshakingFuture.set(null);
+                this.handshakingFuture.complete(null);
                 channel.setHandler(getHandlers(), p -> {
                     EnumeratedProto4jPacket enumeratedPacket = this.packetManager.readPacket(p.getBuffer());
                     switch (enumeratedPacket.getID()) {
@@ -67,19 +65,15 @@ public abstract class Proto4jHighClient<C extends HighChannel> extends Proto4jCl
     }
 
     @Override
-    public ListenableFuture<Void> start(String address, int port) {
-        this.handshakingFuture = SettableFuture.create();
-        Futures.addCallback(super.start(address, port), new FutureCallback<Void>() {
-            @Override
-            public void onSuccess(@Nullable Void aVoid) {
+    public CompletionStage<Void> start(String address, int port) {
+        this.handshakingFuture = new CompletableFuture<>();
+        super.start(address, port).whenComplete((res, ex) -> {
+            if (ex == null) {
                 Handshake.initOnClientside(getChannel());
+            } else if (this.handshakingFuture != null) {
+                this.handshakingFuture.completeExceptionally(ex);
             }
-
-            @Override
-            public void onFailure(Throwable throwable) {
-                handshakingFuture.setException(throwable);
-            }
-        }, getWorkers());
+        });
         return this.handshakingFuture;
     }
 
@@ -114,7 +108,7 @@ public abstract class Proto4jHighClient<C extends HighChannel> extends Proto4jCl
         }
         if (this.handshakingFuture != null) {
             if (!this.handshakingFuture.isDone()) {
-                this.handshakingFuture.setException(new Exception("Disconnected"));
+                this.handshakingFuture.completeExceptionally(new Exception("Disconnected"));
             }
             this.handshakingFuture = null;
         }

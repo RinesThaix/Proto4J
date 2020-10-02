@@ -8,11 +8,12 @@ import java.util.Objects;
  */
 public class RawSerializable implements Proto4jSerializable {
 
-    private int i;
+    private int    i;
     private String nullable;
     private String notNullable;
 
-    public RawSerializable() {}
+    public RawSerializable() {
+    }
 
     public RawSerializable(int i, String nullable, String notNullable) {
         this.i = i;

@@ -1,7 +1,5 @@
 package sexy.kostya.proto4j.transport.lowlevel;
 
-import com.google.common.util.concurrent.ListenableFuture;
-import com.google.common.util.concurrent.SettableFuture;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import org.slf4j.Logger;
@@ -17,6 +15,8 @@ import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
 import java.net.SocketException;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.function.BiConsumer;
 
 /**
@@ -34,12 +34,12 @@ public abstract class Proto4jClient<C extends Channel> extends Proto4jSocket<C> 
         this(LoggerFactory.getLogger("Proto4j Client"), workerThreads, handlerThreads);
     }
 
-    public ListenableFuture<Void> connect(String address, int port) {
+    public CompletionStage<Void> connect(String address, int port) {
         return start(address, port);
     }
 
     @Override
-    void start0(SettableFuture<Void> future, String address, int port) throws SocketException {
+    void start0(CompletableFuture<Void> future, String address, int port) throws SocketException {
         InetSocketAddress remoteAddress = new InetSocketAddress(address, port);
         super.socket = new DatagramSocket();
         this.channel = createChannel(new PacketCodec(this.socket, remoteAddress));
@@ -49,7 +49,7 @@ public abstract class Proto4jClient<C extends Channel> extends Proto4jSocket<C> 
         }
         Thread thread = new Thread(() -> {
             getLogger().info("Started the client");
-            future.set(null);
+            future.complete(null);
             try {
                 while (true) {
                     byte[]         array  = new byte[DatagramHelper.MAX_DATAGRAM_SIZE];

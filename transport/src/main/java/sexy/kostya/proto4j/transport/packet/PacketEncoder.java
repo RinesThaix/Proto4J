@@ -3,9 +3,9 @@ package sexy.kostya.proto4j.transport.packet;
 import com.google.common.base.Preconditions;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
+import sexy.kostya.proto4j.exception.Proto4jException;
 import sexy.kostya.proto4j.transport.buffer.Buffer;
 import sexy.kostya.proto4j.transport.buffer.BufferImpl;
-import sexy.kostya.proto4j.exception.Proto4jException;
 import sexy.kostya.proto4j.transport.util.DatagramHelper;
 
 import java.io.IOException;
@@ -41,10 +41,10 @@ public class PacketEncoder {
         if (packetLength > DatagramHelper.MAX_DATAGRAM_SIZE) {
             Preconditions.checkState((flags & Proto4jPacket.Flag.INDIVISIBLE) == 0, "The packet is too huge, but indivisible: it can't be sent");
             flags |= Proto4jPacket.Flag.PARTIAL;
-            int   capacity = DatagramHelper.MAX_DATAGRAM_SIZE - DatagramHelper.HEADER_LENGTH - DatagramHelper.CRC_LENGTH - 4;
-            short total    = (short) Math.ceil((float) bodyLength / capacity);
+            int   capacity        = DatagramHelper.MAX_DATAGRAM_SIZE - DatagramHelper.HEADER_LENGTH - DatagramHelper.CRC_LENGTH - 4;
+            short total           = (short) Math.ceil((float) bodyLength / capacity);
             short extraBodyLength = (short) (bodyLength + 4 * total);
-            int extraCapacity = capacity + 4;
+            int   extraCapacity   = capacity + 4;
             while (true) {
                 short newTotal = (short) Math.ceil((float) extraBodyLength / extraCapacity);
                 if (newTotal == total) {

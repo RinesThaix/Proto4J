@@ -1,7 +1,5 @@
 package sexy.kostya.proto4j.transport.lowlevel;
 
-import com.google.common.util.concurrent.ListenableFuture;
-import com.google.common.util.concurrent.SettableFuture;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import org.slf4j.Logger;
@@ -15,6 +13,8 @@ import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
 import java.net.SocketException;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 
 /**
  * Created by k.shandurenko on 29.09.2020
@@ -31,16 +31,16 @@ public abstract class Proto4jServer<C extends Channel> extends Proto4jSocket<C> 
         this(LoggerFactory.getLogger("Proto4j Server"), workerThreads, handlerThreads);
     }
 
-    public ListenableFuture<Void> start(int port) {
+    public CompletionStage<Void> start(int port) {
         return start("0.0.0.0", port);
     }
 
     @Override
-    void start0(SettableFuture<Void> future, String address, int port) throws SocketException {
+    void start0(CompletableFuture<Void> future, String address, int port) throws SocketException {
         super.socket = new DatagramSocket(new InetSocketAddress(address, port));
         Thread thread = new Thread(() -> {
             getLogger().info("Listening on {}:{}", address, port);
-            future.set(null);
+            future.complete(null);
             try {
                 while (true) {
                     byte[]         array  = new byte[DatagramHelper.MAX_DATAGRAM_SIZE];

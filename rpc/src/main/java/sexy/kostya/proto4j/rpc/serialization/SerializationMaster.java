@@ -1,7 +1,7 @@
 package sexy.kostya.proto4j.rpc.serialization;
 
-import sexy.kostya.proto4j.transport.buffer.Buffer;
 import sexy.kostya.proto4j.exception.Proto4jSerializationException;
+import sexy.kostya.proto4j.transport.buffer.Buffer;
 
 import java.lang.invoke.LambdaMetafactory;
 import java.lang.invoke.MethodHandle;

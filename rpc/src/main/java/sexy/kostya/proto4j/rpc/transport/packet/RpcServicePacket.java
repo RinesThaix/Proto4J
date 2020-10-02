@@ -8,7 +8,7 @@ import sexy.kostya.proto4j.transport.highlevel.packet.EnumeratedProto4jPacket;
  */
 public class RpcServicePacket extends EnumeratedProto4jPacket {
 
-    private int serviceID;
+    private int     serviceID;
     private boolean register;
 
     public RpcServicePacket() {

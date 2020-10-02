@@ -18,8 +18,8 @@ public class PacketDecoder {
 
     private final PacketCodec codec;
 
-    private final AtomicInteger                     sequence = new AtomicInteger();
-    private final Map<Integer, Proto4jPacket>       order    = new ConcurrentHashMap<>();
+    private final AtomicInteger                    sequence = new AtomicInteger();
+    private final Map<Integer, Proto4jPacket>      order    = new ConcurrentHashMap<>();
     private final Map<Integer, Map<Short, Buffer>> partites = new ConcurrentHashMap<>();
 
     PacketDecoder(PacketCodec codec) {

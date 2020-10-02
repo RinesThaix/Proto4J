@@ -1,7 +1,5 @@
 package sexy.kostya.proto4j.transport.lowlevel;
 
-import com.google.common.util.concurrent.ListenableFuture;
-import com.google.common.util.concurrent.SettableFuture;
 import org.slf4j.Logger;
 import sexy.kostya.proto4j.exception.Proto4jException;
 import sexy.kostya.proto4j.transport.Channel;
@@ -11,6 +9,8 @@ import sexy.kostya.proto4j.transport.packet.Proto4jPacket;
 
 import java.net.DatagramSocket;
 import java.net.SocketException;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.function.BiConsumer;
@@ -37,22 +37,22 @@ public abstract class Proto4jSocket<C extends Channel> {
         this.shutdownHook = new Thread(this::stop0, "Proto4j Socket Shutdown Hook");
     }
 
-    public ListenableFuture<Void> start(String address, int port) {
-        SettableFuture<Void> future = SettableFuture.create();
+    public CompletionStage<Void> start(String address, int port) {
+        CompletableFuture<Void> future = new CompletableFuture<>();
         if (this.socket != null) {
-            future.setException(new Proto4jException("Socket is already started"));
+            future.completeExceptionally(new Proto4jException("Socket is already started"));
             return future;
         }
         Runtime.getRuntime().addShutdownHook(this.shutdownHook);
         try {
             start0(future, address, port);
         } catch (SocketException ex) {
-            future.setException(ex);
+            future.completeExceptionally(ex);
         }
         return future;
     }
 
-    abstract void start0(SettableFuture<Void> future, String address, int port) throws SocketException;
+    abstract void start0(CompletableFuture<Void> future, String address, int port) throws SocketException;
 
     public void stop() {
         if (stop0()) {

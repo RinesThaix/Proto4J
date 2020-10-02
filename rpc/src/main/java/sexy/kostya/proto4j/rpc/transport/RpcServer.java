@@ -2,7 +2,6 @@ package sexy.kostya.proto4j.rpc.transport;
 
 import org.slf4j.LoggerFactory;
 import sexy.kostya.proto4j.rpc.transport.packet.RpcInvocationPacket;
-import sexy.kostya.proto4j.rpc.transport.packet.RpcResponsePacket;
 import sexy.kostya.proto4j.rpc.transport.packet.RpcServicePacket;
 import sexy.kostya.proto4j.transport.highlevel.HighChannel;
 import sexy.kostya.proto4j.transport.highlevel.base.BaseProto4jHighServer;

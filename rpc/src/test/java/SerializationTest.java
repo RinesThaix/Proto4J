@@ -1,7 +1,7 @@
 import org.junit.Assert;
 import org.junit.Test;
-import sexy.kostya.proto4j.transport.buffer.Buffer;
 import sexy.kostya.proto4j.exception.Proto4jSerializationException;
+import sexy.kostya.proto4j.transport.buffer.Buffer;
 import sexy.kostya.proto4j.transport.packet.serialization.Proto4jSerializable;
 import sexy.kostya.proto4j.transport.packet.serialization.SerializationMaster;
 
@@ -36,7 +36,7 @@ public class SerializationTest {
     }
 
     private <S extends Proto4jSerializable> void ok(Class<S> clazz, S serializable) {
-        Function<Buffer, S> reader = SerializationMaster.getReader(clazz);
+        Function<Buffer, S>   reader = SerializationMaster.getReader(clazz);
         BiConsumer<Buffer, S> writer = SerializationMaster.getWriter(clazz);
         try (Buffer buffer = Buffer.newBuffer()) {
             writer.accept(buffer, serializable);
