@@ -1,7 +1,7 @@
 package sexy.kostya.proto4j.rpc;
 
-import sexy.kostya.proto4j.rpc.annotation.Broadcast;
-import sexy.kostya.proto4j.rpc.annotation.Proto4jService;
+import sexy.kostya.proto4j.rpc.service.annotation.Broadcast;
+import sexy.kostya.proto4j.rpc.service.annotation.Proto4jService;
 
 import java.util.List;
 import java.util.Set;
@@ -34,6 +34,10 @@ public interface TestService {
     CompletionStage<Void> broadcastTest(boolean val);
 
     int sumOfAges(Set<Set<TestData>> datas);
+
+    int sumOfAges2(Set<Set<AutoTestData>> datas);
+
+    void print(AutoTestDataExtended data);
 
     CompletionStage<Void> testException();
 

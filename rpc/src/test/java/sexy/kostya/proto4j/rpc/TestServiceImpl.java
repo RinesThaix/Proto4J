@@ -77,6 +77,18 @@ public class TestServiceImpl implements TestService {
     }
 
     @Override
+    public int sumOfAges2(Set<Set<AutoTestData>> datas) {
+        AutoTestData data = datas.iterator().next().iterator().next();
+        System.out.println(data);
+        return datas.stream().mapToInt(ds -> ds.stream().mapToInt(AutoTestData::getAge).sum()).sum();
+    }
+
+    @Override
+    public void print(AutoTestDataExtended data) {
+        System.out.println(data);
+    }
+
+    @Override
     public CompletionStage<Void> testException() {
         throw new RuntimeException("Exception");
     }

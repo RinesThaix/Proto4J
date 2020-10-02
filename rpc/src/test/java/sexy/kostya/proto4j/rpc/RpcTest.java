@@ -7,6 +7,7 @@ import org.junit.Test;
 import sexy.kostya.proto4j.exception.RpcException;
 import sexy.kostya.proto4j.rpc.transport.RpcServer;
 
+import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
@@ -73,6 +74,23 @@ public class RpcTest {
                         new TestData("Donald", "I_AM_TRUMP", 35),
                         new TestData("Tim", "8burton8", 44))
         )));
+
+        Assert.assertEquals(300, svc.sumOfAges2(Sets.newHashSet(
+                Sets.newHashSet(
+                        new AutoTestData("John", "12345", 20),
+                        new AutoTestData("Albert", "1029384756", 35),
+                        new AutoTestData("Gilbert", "09871234650", 45)),
+                Sets.newHashSet(
+                        new AutoTestData("Adam", "55555", 20),
+                        new AutoTestData("Emma", "artificial99", 36),
+                        new AutoTestData("Octavius", "heart&me", 45)),
+                Sets.newHashSet(
+                        new AutoTestData("Boris", "99percentVodka", 20),
+                        new AutoTestData("Donald", "I_AM_TRUMP", 35),
+                        new AutoTestData("Tim", "8burton8", 44))
+        )));
+
+        svc.print(new AutoTestDataExtended("Konstantin", "123123123", 23, UUID.randomUUID()));
 
         try {
             svc.testException().toCompletableFuture().get();
