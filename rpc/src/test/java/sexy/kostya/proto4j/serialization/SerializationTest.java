@@ -1,9 +1,11 @@
+package sexy.kostya.proto4j.serialization;
+
 import org.junit.Assert;
 import org.junit.Test;
 import sexy.kostya.proto4j.exception.Proto4jSerializationException;
+import sexy.kostya.proto4j.rpc.serialization.Proto4jSerializable;
+import sexy.kostya.proto4j.rpc.serialization.SerializationMaster;
 import sexy.kostya.proto4j.transport.buffer.Buffer;
-import sexy.kostya.proto4j.transport.packet.serialization.Proto4jSerializable;
-import sexy.kostya.proto4j.transport.packet.serialization.SerializationMaster;
 
 import java.util.function.BiConsumer;
 import java.util.function.Function;

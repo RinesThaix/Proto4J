@@ -10,14 +10,16 @@ public class RpcInvocationPacket extends CallbackProto4jPacket {
 
     private int    serviceID;
     private int    methodID;
+    private int    index;
     private byte[] arguments;
 
     public RpcInvocationPacket() {
     }
 
-    public RpcInvocationPacket(int serviceID, int methodID, byte[] arguments) {
+    public RpcInvocationPacket(int serviceID, int methodID, int index, byte[] arguments) {
         this.serviceID = serviceID;
         this.methodID = methodID;
+        this.index = index;
         this.arguments = arguments;
     }
 
@@ -27,6 +29,10 @@ public class RpcInvocationPacket extends CallbackProto4jPacket {
 
     public int getMethodID() {
         return methodID;
+    }
+
+    public int getIndex() {
+        return index;
     }
 
     public byte[] getArguments() {
@@ -42,6 +48,7 @@ public class RpcInvocationPacket extends CallbackProto4jPacket {
     public void write(Buffer buffer) {
         buffer.writeInt(this.serviceID);
         buffer.writeInt(this.methodID);
+        buffer.writeInt(this.index);
         buffer.writeVarInt(this.arguments.length);
         buffer.writeBytes(this.arguments);
     }
@@ -50,6 +57,7 @@ public class RpcInvocationPacket extends CallbackProto4jPacket {
     public void read(Buffer buffer) {
         this.serviceID = buffer.readInt();
         this.methodID = buffer.readInt();
+        this.index = buffer.readInt();
         this.arguments = new byte[buffer.readVarInt()];
         buffer.readBytes(this.arguments);
     }

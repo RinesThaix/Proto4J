@@ -8,24 +8,18 @@ import sexy.kostya.proto4j.transport.highlevel.packet.EnumeratedProto4jPacket;
  */
 public class RpcServicePacket extends EnumeratedProto4jPacket {
 
-    private int     serviceID;
-    private boolean register;
+    private int serviceID;
 
     public RpcServicePacket() {
 
     }
 
-    public RpcServicePacket(int serviceID, boolean register) {
+    public RpcServicePacket(int serviceID) {
         this.serviceID = serviceID;
-        this.register = register;
     }
 
     public int getServiceID() {
         return serviceID;
-    }
-
-    public boolean isRegister() {
-        return register;
     }
 
     @Override
@@ -36,12 +30,10 @@ public class RpcServicePacket extends EnumeratedProto4jPacket {
     @Override
     public void write(Buffer buffer) {
         buffer.writeInt(this.serviceID);
-        buffer.writeBoolean(this.register);
     }
 
     @Override
     public void read(Buffer buffer) {
         this.serviceID = buffer.readInt();
-        this.register = buffer.readBoolean();
     }
 }

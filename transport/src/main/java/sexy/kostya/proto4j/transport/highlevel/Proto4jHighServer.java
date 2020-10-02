@@ -14,6 +14,7 @@ import sexy.kostya.proto4j.transport.lowlevel.Proto4jServer;
 import java.net.InetSocketAddress;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.function.Consumer;
 
 /**
  * Created by k.shandurenko on 30.09.2020
@@ -23,6 +24,8 @@ public abstract class Proto4jHighServer<C extends HighChannel> extends Proto4jSe
     private       PacketManager     packetManager     = new DefaultPacketManager();
     private       PacketHandler<C>  packetHandler     = new PacketHandler<>();
     private final CallbacksRegistry callbacksRegistry = new CallbacksRegistry();
+
+    private Consumer<C> onDisconnect;
 
     public Proto4jHighServer(Logger logger, int workerThreads, int handlerThreads) {
         super(logger, workerThreads, handlerThreads);
@@ -101,6 +104,28 @@ public abstract class Proto4jHighServer<C extends HighChannel> extends Proto4jSe
 
     public void setPacketHandler(PacketHandler<C> packetHandler) {
         this.packetHandler = packetHandler;
+    }
+
+    public synchronized void addOnDisconnect(Consumer<C> onDisconnect) {
+        if (this.onDisconnect == null) {
+            this.onDisconnect = ch -> {
+                try {
+                    onDisconnect.accept(ch);
+                } catch (Throwable t) {
+                    getLogger().warn("Could not handle disconnection of channel", t);
+                }
+            };
+        } else {
+            Consumer<C> before = this.onDisconnect;
+            this.onDisconnect = ch -> {
+                before.accept(ch);
+                try {
+                    onDisconnect.accept(ch);
+                } catch (Throwable t) {
+                    getLogger().warn("Could not handle disconnection of channel", t);
+                }
+            };
+        }
     }
 
     public CallbacksRegistry getCallbacksRegistry() {

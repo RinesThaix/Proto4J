@@ -1,6 +1,8 @@
-package sexy.kostya.proto4j.rpc;
+package sexy.kostya.proto4j.rpc.service;
 
+import com.google.common.primitives.Primitives;
 import sexy.kostya.proto4j.exception.Proto4jProxyingException;
+import sexy.kostya.proto4j.rpc.annotation.Index;
 import sexy.kostya.proto4j.rpc.annotation.MethodIdentifier;
 import sexy.kostya.proto4j.rpc.annotation.Proto4jService;
 import sexy.kostya.proto4j.rpc.serialization.SerializationMaster;
@@ -8,15 +10,13 @@ import sexy.kostya.proto4j.rpc.transport.packet.RpcInvocationPacket;
 import sexy.kostya.proto4j.rpc.transport.packet.RpcResponsePacket;
 import sexy.kostya.proto4j.transport.buffer.Buffer;
 import sexy.kostya.proto4j.transport.buffer.BufferImpl;
-import sexy.kostya.proto4j.transport.highlevel.HighChannel;
-import sexy.kostya.proto4j.transport.highlevel.packet.CallbackProto4jPacket;
+import sexy.kostya.proto4j.transport.util.DatagramHelper;
 
+import java.lang.annotation.Annotation;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Method;
-import java.lang.reflect.Proxy;
+import java.lang.reflect.*;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -30,7 +30,7 @@ import java.util.function.Function;
 /**
  * Created by k.shandurenko on 30.09.2020
  */
-public abstract class ServiceProxy {
+public abstract class InternalServiceManagerImpl implements InternalServiceManager {
 
     private final static int JAVA_VERSION = getJavaVersion();
 
@@ -50,8 +50,9 @@ public abstract class ServiceProxy {
     private final Map<Integer, Map<Integer, Function<byte[], CompletionStage<byte[]>>>> implementations = new HashMap<>();
     private final MethodHandles.Lookup                                                  lookup          = MethodHandles.lookup();
 
+    @Override
     @SuppressWarnings("unchecked")
-    public void registerService(Class<?> serviceInterface, Object implementation) {
+    public <S, I extends S> int registerService(Class<S> serviceInterface, I implementation) {
         Class<?> clazz = implementation.getClass();
         if (!serviceInterface.isAssignableFrom(clazz)) {
             throw new Proto4jProxyingException(clazz.getSimpleName() + " does not inherit " + serviceInterface.getSimpleName());
@@ -62,18 +63,19 @@ public abstract class ServiceProxy {
         if (!serviceInterface.isAnnotationPresent(Proto4jService.class)) {
             throw new Proto4jProxyingException(serviceInterface.getSimpleName() + " is not a Proto4jService");
         }
-        Proto4jService                                          annotation        = clazz.getAnnotation(Proto4jService.class);
-        int                                                     serviceIdentifier = annotation.explicitIdentifier() != 0 ? annotation.explicitIdentifier() : clazz.getSimpleName().hashCode();
-        Map<Integer, Function<byte[], CompletionStage<byte[]>>> methods           = new HashMap<>();
+        Proto4jService annotation        = serviceInterface.getAnnotation(Proto4jService.class);
+        int            serviceIdentifier = annotation.explicitIdentifier() != 0 ? annotation.explicitIdentifier() : serviceInterface.getSimpleName().hashCode();
+
+        Map<Integer, Function<byte[], CompletionStage<byte[]>>> methods = new HashMap<>();
         for (Method m : serviceInterface.getDeclaredMethods()) {
             if (m.isDefault()) {
                 continue;
             }
             try {
-                Method  method         = clazz.getDeclaredMethod(m.getName(), m.getParameterTypes());
-                Class   returnType     = method.getReturnType();
-                Class[] parameterTypes = method.getParameterTypes();
-                int     methodIdentifier;
+                Method method         = clazz.getDeclaredMethod(m.getName(), m.getParameterTypes());
+                Type   returnType     = method.getGenericReturnType();
+                Type[] parameterTypes = method.getGenericParameterTypes();
+                int    methodIdentifier;
                 if (method.isAnnotationPresent(MethodIdentifier.class)) {
                     MethodIdentifier methodAnnotation = method.getAnnotation(MethodIdentifier.class);
                     if (methodAnnotation.value() == 0) {
@@ -87,55 +89,42 @@ public abstract class ServiceProxy {
                 for (int i = 0; i < parameterTypes.length; ++i) {
                     readers[i] = SerializationMaster.getReader(parameterTypes[i]);
                 }
-                Function<Object[], Object>                invocation = getMethodInvocation(method);
+                Function<Object[], Object>                invocation = getMethodInvocation(implementation, method);
                 Function<byte[], CompletionStage<byte[]>> func;
                 if (returnType == void.class) {
                     func = bytes -> {
-                        try (Buffer buffer = Buffer.wrap(bytes)) {
-                            Object[] args = new Object[parameterTypes.length];
-                            for (int i = 0; i < args.length; ++i) {
-                                args[i] = readers[i].apply(buffer);
-                            }
-                            invocation.apply(args);
-                            return null;
-                        }
+                        invocation.apply(deserializeArguments(bytes, readers));
+                        return null;
                     };
-                } else if (CompletionStage.class.isAssignableFrom(returnType)) {
-                    returnType = (Class) returnType.getGenericInterfaces()[0];
+                } else if (returnType instanceof ParameterizedType && ((ParameterizedType) returnType).getRawType() == CompletionStage.class) {
+                    returnType = ((ParameterizedType) returnType).getActualTypeArguments()[0];
                     BiConsumer<Buffer, Object> writer = SerializationMaster.getWriter(returnType);
                     func = bytes -> {
-                        try (Buffer buffer = Buffer.wrap(bytes)) {
-                            Object[] args = new Object[parameterTypes.length];
-                            for (int i = 0; i < args.length; ++i) {
-                                args[i] = readers[i].apply(buffer);
-                            }
-                            CompletionStage<?>        future = (CompletionStage<?>) invocation.apply(args);
-                            CompletableFuture<byte[]> result = new CompletableFuture<>();
-                            future.whenComplete((o, ex) -> {
-                                if (ex == null) {
-                                    try (Buffer buf = Buffer.newBuffer()) {
-                                        writer.accept(buf, o);
-                                        result.complete(((BufferImpl) buf).getHandle().array());
-                                    }
-                                } else {
-                                    result.completeExceptionally(ex);
+                        Object[]                  args   = deserializeArguments(bytes, readers);
+                        CompletionStage<?>        future = (CompletionStage<?>) invocation.apply(args);
+                        CompletableFuture<byte[]> result = new CompletableFuture<>();
+                        future.whenComplete((o, ex) -> {
+                            if (ex == null) {
+                                try (Buffer buf = Buffer.newBuffer()) {
+                                    writer.accept(buf, o);
+                                    result.complete(((BufferImpl) buf).getHandle().array());
                                 }
-                            });
-                            return result;
-                        }
+                            } else {
+                                result.completeExceptionally(ex);
+                            }
+                        });
+                        return result;
                     };
                 } else {
+                    if (returnType instanceof Class) {
+                        returnType = Primitives.wrap((Class) returnType);
+                    }
                     BiConsumer<Buffer, Object> writer = SerializationMaster.getWriter(returnType);
                     func = bytes -> {
-                        try (Buffer buffer = Buffer.wrap(bytes)) {
-                            Object[] args = new Object[parameterTypes.length];
-                            for (int i = 0; i < args.length; ++i) {
-                                args[i] = readers[i].apply(buffer);
-                            }
-                            try (Buffer buffer2 = Buffer.newBuffer()) {
-                                writer.accept(buffer2, invocation.apply(args));
-                                return CompletableFuture.completedFuture(((BufferImpl) buffer2).getHandle().array());
-                            }
+                        Object[] args = deserializeArguments(bytes, readers);
+                        try (Buffer buffer = Buffer.newBuffer()) {
+                            writer.accept(buffer, invocation.apply(args));
+                            return CompletableFuture.completedFuture(((BufferImpl) buffer).getHandle().array());
                         }
                     };
                 }
@@ -147,34 +136,41 @@ public abstract class ServiceProxy {
             }
         }
         this.implementations.put(serviceIdentifier, methods);
+        return serviceIdentifier;
     }
 
-    public void process(HighChannel channel, RpcInvocationPacket packet) {
+    public boolean isServiceRegisteredThere(int serviceIdentifier) {
+        return this.implementations.containsKey(serviceIdentifier);
+    }
+
+    @Override
+    public CompletionStage<RpcResponsePacket> invoke(RpcInvocationPacket packet) {
         Map<Integer, Function<byte[], CompletionStage<byte[]>>> implementation = this.implementations.get(packet.getServiceID());
         if (implementation == null) {
-            packet.respond(channel, new RpcResponsePacket("Unknown implementation error", null));
-            return;
+            return CompletableFuture.completedFuture(new RpcResponsePacket("Unknown implementation error", null));
         }
         Function<byte[], CompletionStage<byte[]>> method = implementation.get(packet.getMethodID());
         if (method == null) {
-            packet.respond(channel, new RpcResponsePacket("Unknown method error", null));
-            return;
+            return CompletableFuture.completedFuture(new RpcResponsePacket("Unknown method error", null));
         }
         CompletionStage<byte[]> future = method.apply(packet.getArguments());
         if (future == null) {
-            return;
+            return CompletableFuture.completedFuture(null);
         }
+        CompletableFuture<RpcResponsePacket> result = new CompletableFuture<>();
         future.whenComplete((bytes, ex) -> {
             if (ex == null) {
-                packet.respond(channel, new RpcResponsePacket(null, bytes));
+                result.complete(new RpcResponsePacket(null, bytes));
             } else {
-                packet.respond(channel, new RpcResponsePacket(ex.getMessage(), null));
+                result.complete(new RpcResponsePacket(ex.getMessage(), null));
             }
         });
+        return result;
     }
 
+    @Override
     @SuppressWarnings("unchecked")
-    public <T> T proxy(Class<T> clazz) {
+    public <S> S getService(Class<S> clazz) {
         if (!clazz.isInterface()) {
             throw new Proto4jProxyingException(clazz.getSimpleName() + " is not an interface");
         }
@@ -188,7 +184,7 @@ public abstract class ServiceProxy {
         Map<Method, CheckedFunction<Object[], Object>> methods           = new ConcurrentHashMap<>();
         Set<Integer>                                   methodIdentifiers = new HashSet<>();
 
-        return (T) Proxy.newProxyInstance(clazz.getClassLoader(), new Class[]{clazz}, (proxy, passedMethod, passedArgs) -> {
+        return (S) Proxy.newProxyInstance(clazz.getClassLoader(), new Class[]{clazz}, (proxy, passedMethod, passedArgs) -> {
             //noinspection CodeBlock2Expr
             return methods.computeIfAbsent(passedMethod, method -> {
                 if (method.isDefault()) {
@@ -199,9 +195,9 @@ public abstract class ServiceProxy {
                         throw new Proto4jProxyingException("Could not invoke default method", ex);
                     }
                 }
-                Class   returnType     = method.getReturnType();
-                Class[] parameterTypes = method.getParameterTypes();
-                int     methodIdentifier;
+                Type   returnType     = method.getGenericReturnType();
+                Type[] parameterTypes = method.getGenericParameterTypes();
+                int    methodIdentifier;
                 if (method.isAnnotationPresent(MethodIdentifier.class)) {
                     MethodIdentifier methodAnnotation = method.getAnnotation(MethodIdentifier.class);
                     if (methodAnnotation.value() == 0) {
@@ -214,6 +210,17 @@ public abstract class ServiceProxy {
                 if (!methodIdentifiers.add(methodIdentifier)) {
                     throw new Proto4jProxyingException("Identifier for " + clazz.getSimpleName() + "#" + method.getName() + " duplicates with identifier of another method");
                 }
+
+                Set<Integer>   indexParams      = new HashSet<>();
+                Annotation[][] paramAnnotations = method.getParameterAnnotations();
+                for (int i = 0; i < paramAnnotations.length; ++i) {
+                    for (int j = 0; j < paramAnnotations[i].length; ++j) {
+                        if (paramAnnotations[i][j].annotationType() == Index.class) {
+                            indexParams.add(i);
+                        }
+                    }
+                }
+
                 BiConsumer[] writers = new BiConsumer[parameterTypes.length];
                 for (int i = 0; i < parameterTypes.length; ++i) {
                     writers[i] = SerializationMaster.getWriter(parameterTypes[i]);
@@ -221,26 +228,26 @@ public abstract class ServiceProxy {
                 if (returnType == void.class) {
                     return args -> {
                         byte[]              arguments = serializeArguments(args, writers);
-                        RpcInvocationPacket packet    = new RpcInvocationPacket(serviceIdentifier, methodIdentifier, arguments);
+                        RpcInvocationPacket packet    = new RpcInvocationPacket(serviceIdentifier, methodIdentifier, calculateIndex(indexParams, args), arguments);
                         send(packet);
                         return null;
                     };
-                } else if (CompletionStage.class.isAssignableFrom(returnType)) {
+                } else if (returnType instanceof ParameterizedType && ((ParameterizedType) returnType).getRawType() == CompletionStage.class) {
+                    returnType = ((ParameterizedType) returnType).getActualTypeArguments()[0];
                     Function<Buffer, Object> reader = SerializationMaster.getReader(returnType);
                     return args -> {
                         CompletableFuture   future    = new CompletableFuture();
                         byte[]              arguments = serializeArguments(args, writers);
-                        RpcInvocationPacket packet    = new RpcInvocationPacket(serviceIdentifier, methodIdentifier, arguments);
+                        RpcInvocationPacket packet    = new RpcInvocationPacket(serviceIdentifier, methodIdentifier, calculateIndex(indexParams, args), arguments);
 
-                        CompletionStage<CallbackProto4jPacket> resultFuture = sendWithCallback(packet);
+                        CompletionStage<RpcResponsePacket> resultFuture = sendWithCallback(packet);
                         resultFuture.whenComplete((p, ex) -> {
-                            RpcResponsePacket callback = (RpcResponsePacket) p;
                             if (ex == null) {
-                                try (Buffer buffer = Buffer.wrap(callback.getResponse())) {
+                                try (Buffer buffer = Buffer.wrap(p.getResponse())) {
                                     future.complete(reader.apply(buffer));
                                 }
                             } else {
-                                future.completeExceptionally(new Exception(callback.getError()));
+                                future.completeExceptionally(new Exception(p.getError()));
                             }
                         });
                         return future;
@@ -249,15 +256,16 @@ public abstract class ServiceProxy {
                     Function<Buffer, Object> reader = SerializationMaster.getReader(returnType);
                     return args -> {
                         byte[]              arguments = serializeArguments(args, writers);
-                        RpcInvocationPacket packet    = new RpcInvocationPacket(serviceIdentifier, methodIdentifier, arguments);
+                        RpcInvocationPacket packet    = new RpcInvocationPacket(serviceIdentifier, methodIdentifier, calculateIndex(indexParams, args), arguments);
 
-                        CompletionStage<CallbackProto4jPacket> resultFuture = sendWithCallback(packet);
-                        RpcResponsePacket                      callback     = (RpcResponsePacket) resultFuture.toCompletableFuture().get();
+                        CompletionStage<RpcResponsePacket> resultFuture = sendWithCallback(packet);
+                        RpcResponsePacket                  callback     = resultFuture.toCompletableFuture().get();
                         if (callback.getError() != null) {
                             throw new Exception(callback.getError());
                         } else {
                             try (Buffer buffer = Buffer.wrap(callback.getResponse())) {
-                                return reader.apply(buffer);
+                                Object result = reader.apply(buffer);
+                                return result;
                             }
                         }
                     };
@@ -268,16 +276,42 @@ public abstract class ServiceProxy {
 
     public abstract void send(RpcInvocationPacket packet);
 
-    public abstract CompletionStage<CallbackProto4jPacket> sendWithCallback(RpcInvocationPacket packet);
+    public abstract CompletionStage<RpcResponsePacket> sendWithCallback(RpcInvocationPacket packet);
 
     @SuppressWarnings("unchecked")
     private byte[] serializeArguments(Object[] args, BiConsumer[] writers) {
+        if (args == null || args.length == 0) {
+            return DatagramHelper.ZERO_LENGTH_ARRAY;
+        }
         try (Buffer buffer = Buffer.newBuffer()) {
             for (int i = 0; i < args.length; ++i) {
                 writers[i].accept(buffer, args[i]);
             }
             return ((BufferImpl) buffer).getHandle().array();
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Object[] deserializeArguments(byte[] array, Function[] readers) {
+        Object[] result = new Object[readers.length];
+        try (Buffer buffer = Buffer.wrap(array)) {
+            for (int i = 0; i < result.length; ++i) {
+                result[i] = readers[i].apply(buffer);
+            }
+        }
+        return result;
+    }
+
+    private int calculateIndex(Set<Integer> indices, Object[] args) {
+        if (indices.isEmpty()) {
+            return 0;
+        }
+        int result = 1;
+        for (int index : indices) {
+            Object el = args[index];
+            result = 31 * result + (el == null ? 0 : el.hashCode());
+        }
+        return result;
     }
 
     private MethodHandle getTrustedHandleForMethod(Class<?> proxyClass, Method method) throws Exception {
@@ -292,18 +326,24 @@ public abstract class ServiceProxy {
                     .unreflectSpecial(method, proxyClass);
         }
         return this.lookup.findSpecial(
-                        proxyClass,
-                        method.getName(),
-                        MethodType.methodType(void.class, new Class[0]),
-                        proxyClass
-                );
+                proxyClass,
+                method.getName(),
+                MethodType.methodType(void.class, new Class[0]),
+                proxyClass
+        );
     }
 
-    private Function<Object[], Object> getMethodInvocation(Method method) throws Exception {
+    private Function<Object[], Object> getMethodInvocation(Object impl, Method method) throws Exception {
         MethodHandle handle = this.lookup.unreflect(method);
         return args -> {
             try {
-                return handle.invokeWithArguments(args);
+                if (args == null || args.length == 0) {
+                    return handle.invoke(impl);
+                }
+                Object[] realArgs = new Object[args.length + 1];
+                realArgs[0] = impl;
+                System.arraycopy(args, 0, realArgs, 1, args.length);
+                return handle.invokeWithArguments(realArgs);
             } catch (Throwable throwable) {
                 throw new Proto4jProxyingException("Could not invoke method " + method.getName(), throwable);
             }

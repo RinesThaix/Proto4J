@@ -1,3 +1,5 @@
+package sexy.kostya.proto4j.serialization;
+
 import sexy.kostya.proto4j.rpc.serialization.Proto4jSerializable;
 import sexy.kostya.proto4j.transport.buffer.Buffer;
 
