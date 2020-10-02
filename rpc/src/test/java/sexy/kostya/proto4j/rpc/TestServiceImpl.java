@@ -1,6 +1,7 @@
 package sexy.kostya.proto4j.rpc;
 
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -68,5 +69,15 @@ public class TestServiceImpl implements TestService {
     public CompletionStage<Void> broadcastTest(boolean val) {
         this.value.set(-2);
         return CompletableFuture.completedFuture(null);
+    }
+
+    @Override
+    public int sumOfAges(Set<Set<TestData>> datas) {
+        return datas.stream().mapToInt(ds -> ds.stream().mapToInt(TestData::getAge).sum()).sum();
+    }
+
+    @Override
+    public CompletionStage<Void> testException() {
+        throw new RuntimeException("Exception");
     }
 }

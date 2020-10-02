@@ -64,8 +64,8 @@ public abstract class Proto4jClient<C extends Channel> extends Proto4jSocket<C> 
                         }
                         try {
                             this.channel.recv(Buffer.wrap(buffer));
-                        } catch (Throwable ignored) {
-
+                        } catch (Throwable t) {
+                            t.printStackTrace();
                         }
                     });
                 }

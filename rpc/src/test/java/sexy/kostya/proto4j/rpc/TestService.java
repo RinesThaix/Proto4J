@@ -4,6 +4,7 @@ import sexy.kostya.proto4j.rpc.annotation.Broadcast;
 import sexy.kostya.proto4j.rpc.annotation.Proto4jService;
 
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CompletionStage;
 
 /**
@@ -31,5 +32,9 @@ public interface TestService {
 
     @Broadcast
     CompletionStage<Void> broadcastTest(boolean val);
+
+    int sumOfAges(Set<Set<TestData>> datas);
+
+    CompletionStage<Void> testException();
 
 }

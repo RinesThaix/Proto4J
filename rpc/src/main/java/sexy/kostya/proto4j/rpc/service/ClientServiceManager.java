@@ -1,6 +1,7 @@
 package sexy.kostya.proto4j.rpc.service;
 
 import com.google.common.base.Preconditions;
+import sexy.kostya.proto4j.exception.RpcException;
 import sexy.kostya.proto4j.rpc.transport.RpcClient;
 import sexy.kostya.proto4j.rpc.transport.packet.RpcInvocationPacket;
 import sexy.kostya.proto4j.rpc.transport.packet.RpcResponsePacket;
@@ -40,7 +41,7 @@ public class ClientServiceManager extends BaseServiceManager {
             if (packet.getCallbackID() == 0) {
                 return;
             }
-            packet.respond(invoker, new RpcResponsePacket("Packet came to the application where service implementation is not present", null));
+            packet.respond(invoker, new RpcResponsePacket(new RpcException(RpcException.Code.NO_SERVICE_AVAILABLE, "Packet came to the application where service implementation is not present"), null));
         }
     }
 

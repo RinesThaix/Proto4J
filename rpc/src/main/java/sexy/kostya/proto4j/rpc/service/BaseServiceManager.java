@@ -1,5 +1,6 @@
 package sexy.kostya.proto4j.rpc.service;
 
+import sexy.kostya.proto4j.exception.RpcException;
 import sexy.kostya.proto4j.rpc.transport.packet.RpcInvocationPacket;
 import sexy.kostya.proto4j.rpc.transport.packet.RpcResponsePacket;
 import sexy.kostya.proto4j.transport.highlevel.HighChannel;
@@ -32,7 +33,7 @@ public abstract class BaseServiceManager extends InternalServiceManagerImpl {
         } else {
             HighChannel channel = getChannel(packet);
             if (channel == null || !channel.isActive()) {
-                return CompletableFuture.completedFuture(new RpcResponsePacket("Could not find implementation for service", null));
+                return CompletableFuture.completedFuture(new RpcResponsePacket(new RpcException(RpcException.Code.NO_SERVICE_AVAILABLE, "Could not find implementation for service"), null));
             }
             return channel.sendWithCallback(packet).thenApply(p -> (RpcResponsePacket) p);
         }

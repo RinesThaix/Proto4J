@@ -1,6 +1,7 @@
 package sexy.kostya.proto4j.rpc.service;
 
 import com.google.common.base.Preconditions;
+import sexy.kostya.proto4j.exception.RpcException;
 import sexy.kostya.proto4j.rpc.transport.packet.RpcInvocationPacket;
 import sexy.kostya.proto4j.rpc.transport.packet.RpcResponsePacket;
 import sexy.kostya.proto4j.transport.highlevel.HighChannel;
@@ -98,7 +99,7 @@ public class ServerServiceManager extends BaseServiceManager {
                 short       callbackID = packet.getCallbackID();
                 if (channel == null || !channel.isActive()) {
                     if (callbackID != 0) {
-                        packet.respond(invoker, new RpcResponsePacket("Could not find implementation for service", null));
+                        packet.respond(invoker, new RpcResponsePacket(new RpcException(RpcException.Code.NO_SERVICE_AVAILABLE, "Could not find implementation for service"), null));
                     }
                     return;
                 }

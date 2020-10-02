@@ -1,11 +1,14 @@
 package sexy.kostya.proto4j.rpc;
 
 import com.google.common.collect.Lists;
+import com.google.common.collect.Sets;
 import org.junit.Assert;
 import org.junit.Test;
+import sexy.kostya.proto4j.exception.RpcException;
 import sexy.kostya.proto4j.rpc.transport.RpcServer;
 
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Created by k.shandurenko on 02.10.2020
@@ -56,15 +59,39 @@ public class RpcTest {
 
         Assert.assertSame(2, svc.sumArray(new int[]{3, -1}));
 
+        Assert.assertEquals(300, svc.sumOfAges(Sets.newHashSet(
+                Sets.newHashSet(
+                        new TestData("John", "12345", 20),
+                        new TestData("Albert", "1029384756", 35),
+                        new TestData("Gilbert", "09871234650", 45)),
+                Sets.newHashSet(
+                        new TestData("Adam", "55555", 20),
+                        new TestData("Emma", "artificial99", 36),
+                        new TestData("Octavius", "heart&me", 45)),
+                Sets.newHashSet(
+                        new TestData("Boris", "99percentVodka", 20),
+                        new TestData("Donald", "I_AM_TRUMP", 35),
+                        new TestData("Tim", "8burton8", 44))
+        )));
+
+        try {
+            svc.testException().toCompletableFuture().get();
+            Assert.fail();
+        } catch (ExecutionException ex) {
+            Assert.assertEquals(RpcException.Code.INVOCATION_EXCEPTION, ((RpcException) ex.getCause()).getCode());
+        } catch (Throwable t) {
+            throw t;
+        }
+
         performer2.stop();
 
         try {
             svc.get();
             Assert.fail();
-        } catch (AssertionError ex) {
-            throw ex;
-        } catch (Exception ex) {
-            Assert.assertEquals("Could not find implementation for service", ex.getCause().getMessage());
+        } catch (RpcException ex) {
+            Assert.assertEquals(RpcException.Code.NO_SERVICE_AVAILABLE, ex.getCode());
+        } catch (Throwable t) {
+            throw t;
         }
 
         server.stop();

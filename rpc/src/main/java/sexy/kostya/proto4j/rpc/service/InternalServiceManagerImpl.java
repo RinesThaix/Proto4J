@@ -2,6 +2,7 @@ package sexy.kostya.proto4j.rpc.service;
 
 import com.google.common.primitives.Primitives;
 import sexy.kostya.proto4j.exception.Proto4jProxyingException;
+import sexy.kostya.proto4j.exception.RpcException;
 import sexy.kostya.proto4j.rpc.annotation.Broadcast;
 import sexy.kostya.proto4j.rpc.annotation.Index;
 import sexy.kostya.proto4j.rpc.annotation.MethodIdentifier;
@@ -99,18 +100,22 @@ public abstract class InternalServiceManagerImpl implements InternalServiceManag
                     BiConsumer<Buffer, Object> writer = SerializationMaster.getWriter(returnType);
                     func = bytes -> {
                         Object[]                  args   = deserializeArguments(bytes, readers);
-                        CompletionStage<?>        future = (CompletionStage<?>) invocation.apply(args);
                         CompletableFuture<byte[]> result = new CompletableFuture<>();
-                        future.whenComplete((o, ex) -> {
-                            if (ex == null) {
-                                try (Buffer buf = Buffer.newBuffer()) {
-                                    writer.accept(buf, o);
-                                    result.complete(((BufferImpl) buf).getHandle().array());
+                        try {
+                            CompletionStage<?>        future = (CompletionStage<?>) invocation.apply(args);
+                            future.whenComplete((o, ex) -> {
+                                if (ex == null) {
+                                    try (Buffer buf = Buffer.newBuffer()) {
+                                        writer.accept(buf, o);
+                                        result.complete(((BufferImpl) buf).getHandle().array());
+                                    }
+                                } else {
+                                    result.completeExceptionally(ex);
                                 }
-                            } else {
-                                result.completeExceptionally(ex);
-                            }
-                        });
+                            });
+                        } catch (Throwable throwable) {
+                            result.completeExceptionally(throwable);
+                        }
                         return result;
                     };
                 } else {
@@ -121,8 +126,14 @@ public abstract class InternalServiceManagerImpl implements InternalServiceManag
                     func = bytes -> {
                         Object[] args = deserializeArguments(bytes, readers);
                         try (Buffer buffer = Buffer.newBuffer()) {
-                            writer.accept(buffer, invocation.apply(args));
-                            return CompletableFuture.completedFuture(((BufferImpl) buffer).getHandle().array());
+                            try {
+                                writer.accept(buffer, invocation.apply(args));
+                                return CompletableFuture.completedFuture(((BufferImpl) buffer).getHandle().array());
+                            } catch (Throwable throwable) {
+                                CompletableFuture<byte[]> result = new CompletableFuture<>();
+                                result.completeExceptionally(throwable);
+                                return result;
+                            }
                         }
                     };
                 }
@@ -145,11 +156,11 @@ public abstract class InternalServiceManagerImpl implements InternalServiceManag
     public CompletionStage<RpcResponsePacket> invoke(RpcInvocationPacket packet) {
         Map<Integer, Function<byte[], CompletionStage<byte[]>>> implementation = this.implementations.get(packet.getServiceID());
         if (implementation == null) {
-            return CompletableFuture.completedFuture(new RpcResponsePacket("Unknown implementation error", null));
+            return CompletableFuture.completedFuture(new RpcResponsePacket(new RpcException(RpcException.Code.SIGNATURE_MISMATCH, "Unknown implementation error"), null));
         }
         Function<byte[], CompletionStage<byte[]>> method = implementation.get(packet.getMethodID());
         if (method == null) {
-            return CompletableFuture.completedFuture(new RpcResponsePacket("Unknown method error", null));
+            return CompletableFuture.completedFuture(new RpcResponsePacket(new RpcException(RpcException.Code.SIGNATURE_MISMATCH, "Unknown method error"), null));
         }
         CompletionStage<byte[]> future = method.apply(packet.getArguments());
         if (future == null) {
@@ -160,7 +171,7 @@ public abstract class InternalServiceManagerImpl implements InternalServiceManag
             if (ex == null) {
                 result.complete(new RpcResponsePacket(null, bytes));
             } else {
-                result.complete(new RpcResponsePacket(ex.getMessage(), null));
+                result.complete(new RpcResponsePacket(new RpcException(RpcException.Code.INVOCATION_EXCEPTION, ex.getMessage()), null));
             }
         });
         return result;
@@ -249,11 +260,15 @@ public abstract class InternalServiceManagerImpl implements InternalServiceManag
                         CompletionStage<RpcResponsePacket> resultFuture = sendWithCallback(packet);
                         resultFuture.whenComplete((p, ex) -> {
                             if (ex == null) {
-                                try (Buffer buffer = Buffer.wrap(p.getResponse())) {
-                                    future.complete(reader.apply(buffer));
+                                if (p.getException() == null) {
+                                    try (Buffer buffer = Buffer.wrap(p.getResponse())) {
+                                        future.complete(reader.apply(buffer));
+                                    }
+                                } else {
+                                    future.completeExceptionally(p.getException());
                                 }
                             } else {
-                                future.completeExceptionally(new Exception(p.getError()));
+                                future.completeExceptionally(ex);
                             }
                         });
                         return future;
@@ -266,8 +281,8 @@ public abstract class InternalServiceManagerImpl implements InternalServiceManag
 
                         CompletionStage<RpcResponsePacket> resultFuture = sendWithCallback(packet);
                         RpcResponsePacket                  callback     = resultFuture.toCompletableFuture().get();
-                        if (callback.getError() != null) {
-                            throw new Exception(callback.getError());
+                        if (callback.getException() != null) {
+                            throw callback.getException();
                         } else {
                             try (Buffer buffer = Buffer.wrap(callback.getResponse())) {
                                 Object result = reader.apply(buffer);
@@ -359,7 +374,7 @@ public abstract class InternalServiceManagerImpl implements InternalServiceManag
                 System.arraycopy(args, 0, realArgs, 1, args.length);
                 return handle.invokeWithArguments(realArgs);
             } catch (Throwable throwable) {
-                throw new Proto4jProxyingException("Could not invoke method " + method.getName(), throwable);
+                throw new RuntimeException(throwable.getMessage());
             }
         };
     }
