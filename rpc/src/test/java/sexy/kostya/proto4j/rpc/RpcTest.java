@@ -18,16 +18,19 @@ import java.util.concurrent.ExecutionException;
  */
 public class RpcTest {
 
+    private final static String LOCALHOST = "127.0.0.1";
+    private final static int PORT = 6775;
+
     @Test
     public void testBase() throws ExecutionException, InterruptedException {
         RpcServer server = new RpcServer(2, 2);
-        server.start(6775).toCompletableFuture().get();
+        server.start(PORT).toCompletableFuture().get();
 
         RpcClientPerformer performer = new RpcClientPerformer(2, 2);
-        performer.connect("127.0.0.1", 6775).toCompletableFuture().get();
+        performer.connect(LOCALHOST, PORT).toCompletableFuture().get();
 
         RpcClientUser user = new RpcClientUser(2, 2);
-        user.connect("127.0.0.1", 6775).toCompletableFuture().get();
+        user.connect(LOCALHOST, PORT).toCompletableFuture().get();
 
         TestService svc = user.getService();
 
@@ -49,7 +52,7 @@ public class RpcTest {
         Assert.assertArrayEquals(new long[]{5, 0, 2, 4, 7, 10}, svc.plusOne(new long[]{4, -1, 1, 3, 6, 9}));
 
         RpcClientPerformer performer2 = new RpcClientPerformer(2, 2);
-        performer2.connect("127.0.0.1", 6775).toCompletableFuture().get();
+        performer2.connect(LOCALHOST, PORT).toCompletableFuture().get();
 
         svc.broadcastTest();
         Thread.sleep(10);
@@ -124,8 +127,8 @@ public class RpcTest {
     public void testConclaveServers() throws ExecutionException, InterruptedException {
         System.setProperty("proto4j.conclaveTimeout", "100");
         List<InetSocketAddress> serversAddresses = Lists.newArrayList(
-                new InetSocketAddress("127.0.0.1", 6775),
-                new InetSocketAddress("127.0.0.1", 6776)
+                new InetSocketAddress(LOCALHOST, PORT),
+                new InetSocketAddress(LOCALHOST, PORT + 1)
         );
 
         RpcConclaveServer srv1 = new RpcConclaveServer(serversAddresses, 2, 2);
@@ -171,8 +174,8 @@ public class RpcTest {
     public void testConclaveFull() throws ExecutionException, InterruptedException {
         System.setProperty("proto4j.conclaveTimeout", "100");
         List<InetSocketAddress> serversAddresses = Lists.newArrayList(
-                new InetSocketAddress("127.0.0.1", 6775),
-                new InetSocketAddress("127.0.0.1", 6776)
+                new InetSocketAddress(LOCALHOST, PORT),
+                new InetSocketAddress(LOCALHOST, PORT + 1)
         );
 
         RpcConclaveServer srv1 = new RpcConclaveServer(serversAddresses, 2, 2);

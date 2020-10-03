@@ -12,7 +12,7 @@ public class DatagramHelper {
 
     public final static int    MAX_DATAGRAM_SIZE     = Proto4jProperties.getProperty("maxDatagramSize", 508);
     public final static byte[] ZERO_LENGTH_ARRAY     = new byte[0];
-    public final static long   RELIABILITY_THRESHOLD = Proto4jProperties.getProperty("reliabilityThreshold", 10L);
+    public final static long   RELIABILITY_THRESHOLD = Proto4jProperties.getProperty("reliabilityThreshold", 20L);
 
     /**
      * 2 - length

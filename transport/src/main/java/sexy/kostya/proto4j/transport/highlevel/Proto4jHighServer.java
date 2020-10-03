@@ -2,6 +2,7 @@ package sexy.kostya.proto4j.transport.highlevel;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import sexy.kostya.proto4j.commons.Proto4jException;
 import sexy.kostya.proto4j.commons.Proto4jProperties;
 import sexy.kostya.proto4j.transport.highlevel.packet.CallbackProto4jPacket;
 import sexy.kostya.proto4j.transport.highlevel.packet.EnumeratedProto4jPacket;
@@ -136,7 +137,11 @@ public abstract class Proto4jHighServer<C extends HighChannel> extends Proto4jSe
 
     @Override
     protected boolean shutdownInternally() {
-        super.channel.getAll().values().forEach(channel -> channel.send(new Packet2Disconnect("Server is stopping"), Proto4jPacket.Flag.UNRELIABLE));
+        super.channel.getAll().values().forEach(channel -> {
+            try {
+                channel.send(new Packet2Disconnect("Server is stopping"), Proto4jPacket.Flag.UNRELIABLE);
+            } catch (Proto4jException ignored) {}
+        });
         if (!super.shutdownInternally()) {
             return false;
         }
