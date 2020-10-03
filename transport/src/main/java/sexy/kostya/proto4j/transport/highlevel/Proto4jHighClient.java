@@ -45,7 +45,7 @@ public abstract class Proto4jHighClient<C extends HighChannel> extends Proto4jCl
                             } else {
                                 getLogger().info("Disconnected by server: {}", casted.getReason());
                             }
-                            super.stop();
+                            super.shutdown();
                             break;
                         }
                         default:
@@ -103,14 +103,14 @@ public abstract class Proto4jHighClient<C extends HighChannel> extends Proto4jCl
     }
 
     @Override
-    public void stop() {
+    public void shutdown() {
         getChannel().send(new Packet2Disconnect(), Proto4jPacket.Flag.UNRELIABLE);
-        super.stop();
+        super.shutdown();
     }
 
     @Override
-    protected boolean stop0() {
-        if (!super.stop0()) {
+    protected boolean shutdownInternally() {
+        if (!super.shutdownInternally()) {
             return false;
         }
         if (this.handshakingFuture != null) {

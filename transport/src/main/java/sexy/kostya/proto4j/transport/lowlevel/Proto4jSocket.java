@@ -34,7 +34,7 @@ public abstract class Proto4jSocket<C extends Channel> {
         this.workers = Executors.newFixedThreadPool(workerThreads, new NamedThreadFactory("Proto4j Worker Thread", true));
         this.handlers = Executors.newFixedThreadPool(handlerThreads, new NamedThreadFactory("Proto4j Handler Thread", true));
 
-        this.shutdownHook = new Thread(this::stop0, "Proto4j Socket Shutdown Hook");
+        this.shutdownHook = new Thread(this::shutdownInternally, "Proto4j Socket Shutdown Hook");
     }
 
     public CompletionStage<Void> start(String address, int port) {
@@ -54,13 +54,13 @@ public abstract class Proto4jSocket<C extends Channel> {
 
     abstract void start0(CompletableFuture<Void> future, String address, int port) throws SocketException;
 
-    public void stop() {
-        if (stop0()) {
+    public final void shutdown() {
+        if (shutdownInternally()) {
             Runtime.getRuntime().removeShutdownHook(this.shutdownHook);
         }
     }
 
-    protected boolean stop0() {
+    protected boolean shutdownInternally() {
         if (this.socket != null) {
             this.socket.close();
             this.socket = null;

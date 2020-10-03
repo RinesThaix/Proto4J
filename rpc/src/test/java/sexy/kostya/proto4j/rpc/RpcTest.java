@@ -58,7 +58,7 @@ public class RpcTest {
         svc.broadcastTest(true);
         Assert.assertSame(-2, svc.get());
 
-        performer.stop();
+        performer.shutdown();
 
         Assert.assertSame(2, svc.sumArray(new int[]{3, -1}));
 
@@ -103,7 +103,7 @@ public class RpcTest {
             throw t;
         }
 
-        performer2.stop();
+        performer2.shutdown();
 
         try {
             svc.get();
@@ -114,8 +114,8 @@ public class RpcTest {
             throw t;
         }
 
-        user.stop();
-        server.stop();
+        user.shutdown();
+        server.shutdown();
         Thread.sleep(100);
 
         Assert.assertFalse(user.getChannel().isActive());
@@ -160,11 +160,11 @@ public class RpcTest {
             throw t;
         }
 
-        user.stop();
-        performer1.stop();
-        performer2.stop();
-        srv2.stop();
-        srv1.stop();
+        user.shutdown();
+        performer1.shutdown();
+        performer2.shutdown();
+        srv2.shutdown();
+        srv1.shutdown();
     }
 
 }

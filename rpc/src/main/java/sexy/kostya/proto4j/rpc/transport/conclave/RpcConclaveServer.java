@@ -75,7 +75,7 @@ public class RpcConclaveServer extends Proto4jHighServer<ConclaveChannel> {
                 try {
                     client.start(addr.getHostName(), addr.getPort()).toCompletableFuture().get(1, TimeUnit.SECONDS);
                 } catch (Exception ignored) {
-                    client.stop();
+                    client.shutdown();
                 }
             });
         });
@@ -124,14 +124,14 @@ public class RpcConclaveServer extends Proto4jHighServer<ConclaveChannel> {
         }
 
         @Override
-        protected boolean stop0() {
+        protected boolean shutdownInternally() {
             ConclaveChannel channel = getChannel();
             if (channel != null) {
                 serviceManager.unregister(channel);
                 serviceManager.removeServer(channel);
                 channels.remove(channel.getId());
             }
-            return super.stop0();
+            return super.shutdownInternally();
         }
 
     }
