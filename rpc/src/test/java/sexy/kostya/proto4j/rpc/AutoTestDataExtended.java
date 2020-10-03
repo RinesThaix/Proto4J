@@ -1,6 +1,6 @@
 package sexy.kostya.proto4j.rpc;
 
-import sexy.kostya.proto4j.rpc.serialization.annotation.AutoSerializable;
+import sexy.kostya.proto4j.serialization.annotation.AutoSerializable;
 
 import java.util.UUID;
 

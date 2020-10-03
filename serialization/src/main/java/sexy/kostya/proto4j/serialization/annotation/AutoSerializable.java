@@ -1,4 +1,4 @@
-package sexy.kostya.proto4j.rpc.serialization.annotation;
+package sexy.kostya.proto4j.serialization.annotation;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;

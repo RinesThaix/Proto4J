@@ -1,12 +1,11 @@
 package sexy.kostya.proto4j.rpc;
 
-import sexy.kostya.proto4j.rpc.serialization.Proto4jSerializable;
 import sexy.kostya.proto4j.transport.buffer.Buffer;
 
 /**
  * Created by k.shandurenko on 02.10.2020
  */
-public class TestData implements Proto4jSerializable {
+public class TestData implements BufferSerializable {
 
     private String name;
     private String password;

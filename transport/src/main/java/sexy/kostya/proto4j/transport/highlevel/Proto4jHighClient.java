@@ -103,13 +103,8 @@ public abstract class Proto4jHighClient<C extends HighChannel> extends Proto4jCl
     }
 
     @Override
-    public void shutdown() {
-        getChannel().send(new Packet2Disconnect(), Proto4jPacket.Flag.UNRELIABLE);
-        super.shutdown();
-    }
-
-    @Override
     protected boolean shutdownInternally() {
+        getChannel().send(new Packet2Disconnect(), Proto4jPacket.Flag.UNRELIABLE);
         if (!super.shutdownInternally()) {
             return false;
         }

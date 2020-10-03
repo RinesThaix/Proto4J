@@ -12,6 +12,7 @@
         <module>transport</module>
         <module>scheme</module>
         <module>rpc</module>
+        <module>serialization</module>
     </modules>
 
 

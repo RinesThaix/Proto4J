@@ -1,7 +1,7 @@
 package sexy.kostya.proto4j.rpc;
 
-import sexy.kostya.proto4j.rpc.serialization.annotation.AutoSerializable;
-import sexy.kostya.proto4j.rpc.serialization.annotation.Transient;
+import sexy.kostya.proto4j.serialization.annotation.AutoSerializable;
+import sexy.kostya.proto4j.serialization.annotation.Transient;
 
 /**
  * Created by k.shandurenko on 02.10.2020

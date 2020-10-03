@@ -1,4 +1,4 @@
-package sexy.kostya.proto4j.rpc.util;
+package sexy.kostya.proto4j.serialization;
 
 import java.lang.invoke.*;
 import java.lang.reflect.Field;

@@ -132,13 +132,8 @@ public abstract class Proto4jHighServer<C extends HighChannel> extends Proto4jSe
     }
 
     @Override
-    public void shutdown() {
-        super.channel.getAll().values().forEach(channel -> channel.send(new Packet2Disconnect("Server is stopping"), Proto4jPacket.Flag.UNRELIABLE));
-        super.shutdown();
-    }
-
-    @Override
     protected boolean shutdownInternally() {
+        super.channel.getAll().values().forEach(channel -> channel.send(new Packet2Disconnect("Server is stopping"), Proto4jPacket.Flag.UNRELIABLE));
         if (!super.shutdownInternally()) {
             return false;
         }

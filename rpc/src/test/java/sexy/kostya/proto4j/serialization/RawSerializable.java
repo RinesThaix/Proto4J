@@ -1,6 +1,6 @@
 package sexy.kostya.proto4j.serialization;
 
-import sexy.kostya.proto4j.rpc.serialization.Proto4jSerializable;
+import sexy.kostya.proto4j.rpc.BufferSerializable;
 import sexy.kostya.proto4j.transport.buffer.Buffer;
 
 import java.util.Objects;
@@ -8,7 +8,7 @@ import java.util.Objects;
 /**
  * Created by k.shandurenko on 30.09.2020
  */
-public class RawSerializable implements Proto4jSerializable {
+public class RawSerializable implements BufferSerializable {
 
     private int    i;
     private String nullable;

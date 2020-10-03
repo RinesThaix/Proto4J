@@ -1,12 +1,12 @@
 package sexy.kostya.proto4j.exception;
 
-import sexy.kostya.proto4j.rpc.serialization.Proto4jSerializable;
+import sexy.kostya.proto4j.rpc.BufferSerializable;
 import sexy.kostya.proto4j.transport.buffer.Buffer;
 
 /**
  * Created by k.shandurenko on 02.10.2020
  */
-public class RpcException extends Proto4jException implements Proto4jSerializable {
+public class RpcException extends Proto4jException implements BufferSerializable {
 
     private int    code;
     private String message;

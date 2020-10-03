@@ -3,7 +3,7 @@ package sexy.kostya.proto4j.rpc.service;
 import com.google.common.primitives.Primitives;
 import sexy.kostya.proto4j.exception.Proto4jProxyingException;
 import sexy.kostya.proto4j.exception.RpcException;
-import sexy.kostya.proto4j.rpc.serialization.SerializationMaster;
+import sexy.kostya.proto4j.rpc.BufferSerializer;
 import sexy.kostya.proto4j.rpc.service.annotation.Broadcast;
 import sexy.kostya.proto4j.rpc.service.annotation.Index;
 import sexy.kostya.proto4j.rpc.service.annotation.MethodIdentifier;
@@ -89,7 +89,7 @@ public abstract class InternalServiceManagerImpl implements InternalServiceManag
                     }
                     Function[] readers = new Function[parameterTypes.length];
                     for (int i = 0; i < parameterTypes.length; ++i) {
-                        readers[i] = SerializationMaster.getReader(parameterTypes[i]);
+                        readers[i] = BufferSerializer.getInstance().getReader(parameterTypes[i]);
                     }
                     Function<Object[], Object>                invocation = getMethodInvocation(implementation, method);
                     Function<byte[], CompletionStage<byte[]>> func;
@@ -100,7 +100,7 @@ public abstract class InternalServiceManagerImpl implements InternalServiceManag
                         };
                     } else if (isVoidCompletionStage(returnType)) {
                         returnType = ((ParameterizedType) returnType).getActualTypeArguments()[0];
-                        BiConsumer<Buffer, Object> writer = SerializationMaster.getWriter(returnType);
+                        BiConsumer<Buffer, Object> writer = BufferSerializer.getInstance().getWriter(returnType);
                         func = bytes -> {
                             Object[]                  args   = deserializeArguments(bytes, readers);
                             CompletableFuture<byte[]> result = new CompletableFuture<>();
@@ -125,7 +125,7 @@ public abstract class InternalServiceManagerImpl implements InternalServiceManag
                         if (returnType instanceof Class) {
                             returnType = Primitives.wrap((Class) returnType);
                         }
-                        BiConsumer<Buffer, Object> writer = SerializationMaster.getWriter(returnType);
+                        BiConsumer<Buffer, Object> writer = BufferSerializer.getInstance().getWriter(returnType);
                         func = bytes -> {
                             Object[] args = deserializeArguments(bytes, readers);
                             try (Buffer buffer = Buffer.newBuffer()) {
@@ -247,7 +247,7 @@ public abstract class InternalServiceManagerImpl implements InternalServiceManag
 
                 BiConsumer[] writers = new BiConsumer[parameterTypes.length];
                 for (int i = 0; i < parameterTypes.length; ++i) {
-                    writers[i] = SerializationMaster.getWriter(parameterTypes[i]);
+                    writers[i] = BufferSerializer.getInstance().getWriter(parameterTypes[i]);
                 }
                 if (returnType == void.class) {
                     return args -> {
@@ -258,7 +258,7 @@ public abstract class InternalServiceManagerImpl implements InternalServiceManag
                     };
                 } else if (isVoidCompletionStage(returnType)) {
                     returnType = ((ParameterizedType) returnType).getActualTypeArguments()[0];
-                    Function<Buffer, Object> reader = SerializationMaster.getReader(returnType);
+                    Function<Buffer, Object> reader = BufferSerializer.getInstance().getReader(returnType);
                     return args -> {
                         CompletableFuture   future    = new CompletableFuture();
                         byte[]              arguments = serializeArguments(args, writers);
@@ -281,7 +281,7 @@ public abstract class InternalServiceManagerImpl implements InternalServiceManag
                         return future;
                     };
                 } else {
-                    Function<Buffer, Object> reader = SerializationMaster.getReader(returnType);
+                    Function<Buffer, Object> reader = BufferSerializer.getInstance().getReader(returnType);
                     return args -> {
                         byte[]              arguments = serializeArguments(args, writers);
                         RpcInvocationPacket packet    = new RpcInvocationPacket(serviceIdentifier, methodIdentifier, calculateIndex(indexParams, args), broadcast, arguments);

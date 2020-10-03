@@ -1,9 +1,9 @@
-package sexy.kostya.proto4j.exception;
+package sexy.kostya.proto4j.serialization.exception;
 
 /**
  * Created by k.shandurenko on 30.09.2020
  */
-public class Proto4jSerializationException extends Proto4jException {
+public class Proto4jSerializationException extends RuntimeException {
 
     public Proto4jSerializationException() {
     }

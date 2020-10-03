@@ -2,9 +2,8 @@ package sexy.kostya.proto4j.serialization;
 
 import org.junit.Assert;
 import org.junit.Test;
-import sexy.kostya.proto4j.exception.Proto4jSerializationException;
-import sexy.kostya.proto4j.rpc.serialization.Proto4jSerializable;
-import sexy.kostya.proto4j.rpc.serialization.SerializationMaster;
+import sexy.kostya.proto4j.rpc.BufferSerializer;
+import sexy.kostya.proto4j.serialization.exception.Proto4jSerializationException;
 import sexy.kostya.proto4j.transport.buffer.Buffer;
 
 import java.util.function.BiConsumer;
@@ -23,14 +22,15 @@ public class SerializationTest {
 
     @Test
     public void testExceptions() {
-        exception(SerializationMaster.class);
+        exception(Serializer.class);
         exception(StringBuilder.class);
     }
 
     private <S> void exception(Class<S> clazz) {
+        Serializer<Buffer> serializer = BufferSerializer.getInstance();
         try {
-            SerializationMaster.getReader(clazz);
-            SerializationMaster.getWriter(clazz);
+            serializer.getReader(clazz);
+            serializer.getWriter(clazz);
         } catch (Proto4jSerializationException ignored) {
             return; // ok
         }
@@ -38,8 +38,9 @@ public class SerializationTest {
     }
 
     private <S extends Proto4jSerializable> void ok(Class<S> clazz, S serializable) {
-        Function<Buffer, S>   reader = SerializationMaster.getReader(clazz);
-        BiConsumer<Buffer, S> writer = SerializationMaster.getWriter(clazz);
+        Serializer<Buffer>    serializer = BufferSerializer.getInstance();
+        Function<Buffer, S>   reader     = serializer.getReader(clazz);
+        BiConsumer<Buffer, S> writer     = serializer.getWriter(clazz);
         try (Buffer buffer = Buffer.newBuffer()) {
             writer.accept(buffer, serializable);
             S newSerializable = reader.apply(buffer);

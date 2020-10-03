@@ -1,4 +1,4 @@
-package sexy.kostya.proto4j.rpc.serialization.annotation;
+package sexy.kostya.proto4j.serialization.annotation;
 
 /**
  * Created by k.shandurenko on 03.10.2020
