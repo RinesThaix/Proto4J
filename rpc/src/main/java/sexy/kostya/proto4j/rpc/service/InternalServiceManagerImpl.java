@@ -3,11 +3,11 @@ package sexy.kostya.proto4j.rpc.service;
 import com.google.common.primitives.Primitives;
 import sexy.kostya.proto4j.exception.Proto4jProxyingException;
 import sexy.kostya.proto4j.exception.RpcException;
+import sexy.kostya.proto4j.rpc.serialization.SerializationMaster;
 import sexy.kostya.proto4j.rpc.service.annotation.Broadcast;
 import sexy.kostya.proto4j.rpc.service.annotation.Index;
 import sexy.kostya.proto4j.rpc.service.annotation.MethodIdentifier;
 import sexy.kostya.proto4j.rpc.service.annotation.Proto4jService;
-import sexy.kostya.proto4j.rpc.serialization.SerializationMaster;
 import sexy.kostya.proto4j.rpc.transport.packet.RpcInvocationPacket;
 import sexy.kostya.proto4j.rpc.transport.packet.RpcResponsePacket;
 import sexy.kostya.proto4j.transport.buffer.Buffer;
@@ -51,101 +51,108 @@ public abstract class InternalServiceManagerImpl implements InternalServiceManag
 
     @Override
     @SuppressWarnings("unchecked")
-    public <S, I extends S> int registerService(Class<S> serviceInterface, I implementation) {
-        Class<?> clazz = implementation.getClass();
-        if (!serviceInterface.isAssignableFrom(clazz)) {
-            throw new Proto4jProxyingException(clazz.getSimpleName() + " does not inherit " + serviceInterface.getSimpleName());
-        }
-        if (!serviceInterface.isInterface()) {
-            throw new Proto4jProxyingException(serviceInterface.getSimpleName() + " is not an interface");
-        }
-        if (!serviceInterface.isAnnotationPresent(Proto4jService.class)) {
-            throw new Proto4jProxyingException(serviceInterface.getSimpleName() + " is not a Proto4jService");
-        }
-        Proto4jService annotation        = serviceInterface.getAnnotation(Proto4jService.class);
-        int            serviceIdentifier = annotation.explicitIdentifier() != 0 ? annotation.explicitIdentifier() : serviceInterface.getSimpleName().hashCode();
+    public <S, I extends S> CompletionStage<Integer> registerService(Class<S> serviceInterface, I implementation) {
+        CompletableFuture<Integer> futureResult = new CompletableFuture<>();
+        try {
 
-        Map<Integer, Function<byte[], CompletionStage<byte[]>>> methods = new HashMap<>();
-        for (Method m : serviceInterface.getDeclaredMethods()) {
-            if (m.isDefault()) {
-                continue;
+            Class<?> clazz = implementation.getClass();
+            if (!serviceInterface.isAssignableFrom(clazz)) {
+                throw new Proto4jProxyingException(clazz.getSimpleName() + " does not inherit " + serviceInterface.getSimpleName());
             }
-            try {
-                Method method         = serviceInterface.getDeclaredMethod(m.getName(), m.getParameterTypes());
-                Type   returnType     = method.getGenericReturnType();
-                Type[] parameterTypes = method.getGenericParameterTypes();
-                int    methodIdentifier;
-                if (method.isAnnotationPresent(MethodIdentifier.class)) {
-                    MethodIdentifier methodAnnotation = method.getAnnotation(MethodIdentifier.class);
-                    if (methodAnnotation.value() == 0) {
-                        throw new Proto4jProxyingException("Identifier for " + clazz.getSimpleName() + "#" + method.getName() + " is zero, it's now allowed");
-                    }
-                    methodIdentifier = methodAnnotation.value();
-                } else {
-                    methodIdentifier = hash(method);
+            if (!serviceInterface.isInterface()) {
+                throw new Proto4jProxyingException(serviceInterface.getSimpleName() + " is not an interface");
+            }
+            if (!serviceInterface.isAnnotationPresent(Proto4jService.class)) {
+                throw new Proto4jProxyingException(serviceInterface.getSimpleName() + " is not a Proto4jService");
+            }
+            Proto4jService annotation        = serviceInterface.getAnnotation(Proto4jService.class);
+            int            serviceIdentifier = annotation.explicitIdentifier() != 0 ? annotation.explicitIdentifier() : serviceInterface.getSimpleName().hashCode();
+
+            Map<Integer, Function<byte[], CompletionStage<byte[]>>> methods = new HashMap<>();
+            for (Method m : serviceInterface.getDeclaredMethods()) {
+                if (m.isDefault()) {
+                    continue;
                 }
-                Function[] readers = new Function[parameterTypes.length];
-                for (int i = 0; i < parameterTypes.length; ++i) {
-                    readers[i] = SerializationMaster.getReader(parameterTypes[i]);
-                }
-                Function<Object[], Object>                invocation = getMethodInvocation(implementation, method);
-                Function<byte[], CompletionStage<byte[]>> func;
-                if (returnType == void.class) {
-                    func = bytes -> {
-                        invocation.apply(deserializeArguments(bytes, readers));
-                        return null;
-                    };
-                } else if (isVoidCompletionStage(returnType)) {
-                    returnType = ((ParameterizedType) returnType).getActualTypeArguments()[0];
-                    BiConsumer<Buffer, Object> writer = SerializationMaster.getWriter(returnType);
-                    func = bytes -> {
-                        Object[]                  args   = deserializeArguments(bytes, readers);
-                        CompletableFuture<byte[]> result = new CompletableFuture<>();
-                        try {
-                            CompletionStage<?>        future = (CompletionStage<?>) invocation.apply(args);
-                            future.whenComplete((o, ex) -> {
-                                if (ex == null) {
-                                    try (Buffer buf = Buffer.newBuffer()) {
-                                        writer.accept(buf, o);
-                                        result.complete(((BufferImpl) buf).getHandle().array());
-                                    }
-                                } else {
-                                    result.completeExceptionally(ex);
-                                }
-                            });
-                        } catch (Throwable throwable) {
-                            result.completeExceptionally(throwable);
+                try {
+                    Method method         = serviceInterface.getDeclaredMethod(m.getName(), m.getParameterTypes());
+                    Type   returnType     = method.getGenericReturnType();
+                    Type[] parameterTypes = method.getGenericParameterTypes();
+                    int    methodIdentifier;
+                    if (method.isAnnotationPresent(MethodIdentifier.class)) {
+                        MethodIdentifier methodAnnotation = method.getAnnotation(MethodIdentifier.class);
+                        if (methodAnnotation.value() == 0) {
+                            throw new Proto4jProxyingException("Identifier for " + clazz.getSimpleName() + "#" + method.getName() + " is zero, it's now allowed");
                         }
-                        return result;
-                    };
-                } else {
-                    if (returnType instanceof Class) {
-                        returnType = Primitives.wrap((Class) returnType);
+                        methodIdentifier = methodAnnotation.value();
+                    } else {
+                        methodIdentifier = hash(method);
                     }
-                    BiConsumer<Buffer, Object> writer = SerializationMaster.getWriter(returnType);
-                    func = bytes -> {
-                        Object[] args = deserializeArguments(bytes, readers);
-                        try (Buffer buffer = Buffer.newBuffer()) {
+                    Function[] readers = new Function[parameterTypes.length];
+                    for (int i = 0; i < parameterTypes.length; ++i) {
+                        readers[i] = SerializationMaster.getReader(parameterTypes[i]);
+                    }
+                    Function<Object[], Object>                invocation = getMethodInvocation(implementation, method);
+                    Function<byte[], CompletionStage<byte[]>> func;
+                    if (returnType == void.class) {
+                        func = bytes -> {
+                            invocation.apply(deserializeArguments(bytes, readers));
+                            return null;
+                        };
+                    } else if (isVoidCompletionStage(returnType)) {
+                        returnType = ((ParameterizedType) returnType).getActualTypeArguments()[0];
+                        BiConsumer<Buffer, Object> writer = SerializationMaster.getWriter(returnType);
+                        func = bytes -> {
+                            Object[]                  args   = deserializeArguments(bytes, readers);
+                            CompletableFuture<byte[]> result = new CompletableFuture<>();
                             try {
-                                writer.accept(buffer, invocation.apply(args));
-                                return CompletableFuture.completedFuture(((BufferImpl) buffer).getHandle().array());
+                                CompletionStage<?> future = (CompletionStage<?>) invocation.apply(args);
+                                future.whenComplete((o, ex) -> {
+                                    if (ex == null) {
+                                        try (Buffer buf = Buffer.newBuffer()) {
+                                            writer.accept(buf, o);
+                                            result.complete(((BufferImpl) buf).getHandle().array());
+                                        }
+                                    } else {
+                                        result.completeExceptionally(ex);
+                                    }
+                                });
                             } catch (Throwable throwable) {
-                                CompletableFuture<byte[]> result = new CompletableFuture<>();
                                 result.completeExceptionally(throwable);
-                                return result;
                             }
+                            return result;
+                        };
+                    } else {
+                        if (returnType instanceof Class) {
+                            returnType = Primitives.wrap((Class) returnType);
                         }
-                    };
+                        BiConsumer<Buffer, Object> writer = SerializationMaster.getWriter(returnType);
+                        func = bytes -> {
+                            Object[] args = deserializeArguments(bytes, readers);
+                            try (Buffer buffer = Buffer.newBuffer()) {
+                                try {
+                                    writer.accept(buffer, invocation.apply(args));
+                                    return CompletableFuture.completedFuture(((BufferImpl) buffer).getHandle().array());
+                                } catch (Throwable throwable) {
+                                    CompletableFuture<byte[]> result = new CompletableFuture<>();
+                                    result.completeExceptionally(throwable);
+                                    return result;
+                                }
+                            }
+                        };
+                    }
+                    methods.put(methodIdentifier, func);
+                } catch (NoSuchMethodException e) {
+                    throw new Proto4jProxyingException(clazz.getSimpleName() + "#" + m.getName() + " is not present");
+                } catch (Exception e) {
+                    throw new Proto4jProxyingException(clazz.getSimpleName() + "#" + m.getName() + " can't be proxied", e);
                 }
-                methods.put(methodIdentifier, func);
-            } catch (NoSuchMethodException e) {
-                throw new Proto4jProxyingException(clazz.getSimpleName() + "#" + m.getName() + " is not present");
-            } catch (Exception e) {
-                throw new Proto4jProxyingException(clazz.getSimpleName() + "#" + m.getName() + " can't be proxied", e);
             }
+            this.implementations.put(serviceIdentifier, methods);
+            futureResult.complete(serviceIdentifier);
+        } catch (Throwable t) {
+            futureResult.completeExceptionally(t);
         }
-        this.implementations.put(serviceIdentifier, methods);
-        return serviceIdentifier;
+        return futureResult;
     }
 
     public boolean isServiceRegisteredThere(int serviceIdentifier) {
@@ -171,7 +178,7 @@ public abstract class InternalServiceManagerImpl implements InternalServiceManag
             if (ex == null) {
                 result.complete(new RpcResponsePacket(null, bytes));
             } else {
-                result.complete(new RpcResponsePacket(new RpcException(RpcException.Code.INVOCATION_EXCEPTION, ex.getMessage()), null));
+                result.complete(new RpcResponsePacket(new RpcException(RpcException.Code.EXECUTION_EXCEPTION, ex), null));
             }
         });
         return result;
@@ -191,7 +198,7 @@ public abstract class InternalServiceManagerImpl implements InternalServiceManag
         int            serviceIdentifier = annotation.explicitIdentifier() != 0 ? annotation.explicitIdentifier() : clazz.getSimpleName().hashCode();
 
         Map<Integer, CheckedFunction<Object[], Object>> methods           = new ConcurrentHashMap<>();
-        Set<Integer>                                   methodIdentifiers = new HashSet<>();
+        Set<Integer>                                    methodIdentifiers = new HashSet<>();
 
         return (S) Proxy.newProxyInstance(clazz.getClassLoader(), new Class[]{clazz}, (proxy, method, passedArgs) -> {
             int hash = hash(method);
@@ -268,7 +275,7 @@ public abstract class InternalServiceManagerImpl implements InternalServiceManag
                                     future.completeExceptionally(p.getException());
                                 }
                             } else {
-                                future.completeExceptionally(ex);
+                                future.completeExceptionally(new RpcException(RpcException.Code.INVOCATION_EXCEPTION, ex));
                             }
                         });
                         return future;
@@ -280,13 +287,17 @@ public abstract class InternalServiceManagerImpl implements InternalServiceManag
                         RpcInvocationPacket packet    = new RpcInvocationPacket(serviceIdentifier, methodIdentifier, calculateIndex(indexParams, args), broadcast, arguments);
 
                         CompletionStage<RpcResponsePacket> resultFuture = sendWithCallback(packet);
-                        RpcResponsePacket                  callback     = resultFuture.toCompletableFuture().get();
+                        RpcResponsePacket                  callback;
+                        try {
+                            callback = resultFuture.toCompletableFuture().get();
+                        } catch (Throwable t) {
+                            throw new RpcException(RpcException.Code.INVOCATION_EXCEPTION, t);
+                        }
                         if (callback.getException() != null) {
                             throw callback.getException();
                         } else {
                             try (Buffer buffer = Buffer.wrap(callback.getResponse())) {
-                                Object result = reader.apply(buffer);
-                                return result;
+                                return reader.apply(buffer);
                             }
                         }
                     };

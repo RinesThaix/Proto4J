@@ -20,6 +20,12 @@ public class RpcException extends Proto4jException implements Proto4jSerializabl
         this.message = message;
     }
 
+    public RpcException(int code, Throwable cause) {
+        super(cause);
+        this.code = code;
+        this.message = cause.getMessage();
+    }
+
     public int getCode() {
         return this.code;
     }
@@ -45,7 +51,8 @@ public class RpcException extends Proto4jException implements Proto4jSerializabl
 
         public final static int NO_SERVICE_AVAILABLE = 1000;
         public final static int SIGNATURE_MISMATCH   = 1001;
-        public final static int INVOCATION_EXCEPTION = 1002;
+        public final static int EXECUTION_EXCEPTION  = 1002;
+        public final static int INVOCATION_EXCEPTION = 1003;
 
     }
 

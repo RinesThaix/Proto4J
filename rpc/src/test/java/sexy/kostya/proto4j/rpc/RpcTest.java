@@ -6,10 +6,12 @@ import org.junit.Assert;
 import org.junit.Test;
 import sexy.kostya.proto4j.exception.RpcException;
 import sexy.kostya.proto4j.rpc.transport.RpcServer;
+import sexy.kostya.proto4j.rpc.transport.conclave.RpcConclaveServer;
 
+import java.net.InetSocketAddress;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Created by k.shandurenko on 02.10.2020
@@ -17,7 +19,7 @@ import java.util.concurrent.TimeUnit;
 public class RpcTest {
 
     @Test
-    public void testRpc() throws ExecutionException, InterruptedException {
+    public void testBase() throws ExecutionException, InterruptedException {
         RpcServer server = new RpcServer(2, 2);
         server.start(6775).toCompletableFuture().get();
 
@@ -96,7 +98,7 @@ public class RpcTest {
             svc.testException().toCompletableFuture().get();
             Assert.fail();
         } catch (ExecutionException ex) {
-            Assert.assertEquals(RpcException.Code.INVOCATION_EXCEPTION, ((RpcException) ex.getCause()).getCode());
+            Assert.assertEquals(RpcException.Code.EXECUTION_EXCEPTION, ((RpcException) ex.getCause()).getCode());
         } catch (Throwable t) {
             throw t;
         }
@@ -112,10 +114,57 @@ public class RpcTest {
             throw t;
         }
 
+        user.stop();
         server.stop();
         Thread.sleep(100);
 
         Assert.assertFalse(user.getChannel().isActive());
+    }
+
+    @Test
+    public void testConclave() throws ExecutionException, InterruptedException {
+        List<InetSocketAddress> serversAddresses = Lists.newArrayList(
+                new InetSocketAddress("127.0.0.1", 6775),
+                new InetSocketAddress("127.0.0.1", 6776)
+        );
+
+        RpcConclaveServer srv1 = new RpcConclaveServer(serversAddresses, 2, 2);
+        srv1.start(serversAddresses.get(0)).toCompletableFuture().get();
+
+        RpcConclaveServer srv2 = new RpcConclaveServer(serversAddresses, 2, 2);
+        srv2.start(serversAddresses.get(1)).toCompletableFuture().get();
+
+        RpcClientPerformer performer1 = new RpcClientPerformer(2, 2);
+        performer1.connect(serversAddresses.get(1)).toCompletableFuture().get();
+
+        RpcClientUser user = new RpcClientUser(2, 2);
+        user.connect(serversAddresses.get(0)).toCompletableFuture().get();
+
+        TestService svc = user.getService();
+
+        Assert.assertSame(0, svc.get());
+        svc.setWithFuture(5, 6).toCompletableFuture().get();
+        Assert.assertSame(11, svc.get());
+
+        RpcClientPerformer performer2 = new RpcClientPerformer(2, 2);
+        performer2.connect(serversAddresses.get(0)).toCompletableFuture().get();
+
+        svc.print(new AutoTestDataExtended("Alice", "321321321", 24, UUID.randomUUID()));
+
+        try {
+            svc.testException().toCompletableFuture().get();
+            Assert.fail();
+        } catch (ExecutionException ex) {
+            Assert.assertEquals(RpcException.Code.EXECUTION_EXCEPTION, ((RpcException) ex.getCause()).getCode());
+        } catch (Throwable t) {
+            throw t;
+        }
+
+        user.stop();
+        performer1.stop();
+        performer2.stop();
+        srv2.stop();
+        srv1.stop();
     }
 
 }

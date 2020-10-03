@@ -8,11 +8,11 @@ import sexy.kostya.proto4j.transport.highlevel.packet.CallbackProto4jPacket;
  */
 public class RpcInvocationPacket extends CallbackProto4jPacket {
 
-    private int    serviceID;
-    private int    methodID;
-    private int    index;
+    private int     serviceID;
+    private int     methodID;
+    private int     index;
     private boolean broadcast;
-    private byte[] arguments;
+    private byte[]  arguments;
 
     public RpcInvocationPacket() {
     }
@@ -39,6 +39,10 @@ public class RpcInvocationPacket extends CallbackProto4jPacket {
 
     public boolean isBroadcast() {
         return broadcast;
+    }
+
+    public boolean canBeExecutedLocally() {
+        return this.index == 0 && !this.broadcast;
     }
 
     public byte[] getArguments() {

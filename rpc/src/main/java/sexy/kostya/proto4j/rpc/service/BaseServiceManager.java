@@ -11,14 +11,14 @@ import java.util.concurrent.CompletionStage;
 /**
  * Created by k.shandurenko on 02.10.2020
  */
-public abstract class BaseServiceManager extends InternalServiceManagerImpl {
+public abstract class BaseServiceManager<C extends HighChannel> extends InternalServiceManagerImpl {
 
     @Override
     public void send(RpcInvocationPacket packet) {
-        if (isServiceRegisteredThere(packet.getServiceID())) {
+        if (isServiceRegisteredThere(packet.getServiceID()) && packet.canBeExecutedLocally()) {
             invoke(packet);
         } else {
-            HighChannel channel = getChannel(packet);
+            C channel = getChannel(packet);
             if (channel == null || !channel.isActive()) {
                 throw new NullPointerException("Could not find implementation for service");
             }
@@ -28,10 +28,10 @@ public abstract class BaseServiceManager extends InternalServiceManagerImpl {
 
     @Override
     public CompletionStage<RpcResponsePacket> sendWithCallback(RpcInvocationPacket packet) {
-        if (isServiceRegisteredThere(packet.getServiceID())) {
+        if (isServiceRegisteredThere(packet.getServiceID()) && packet.canBeExecutedLocally()) {
             return invoke(packet);
         } else {
-            HighChannel channel = getChannel(packet);
+            C channel = getChannel(packet);
             if (channel == null || !channel.isActive()) {
                 return CompletableFuture.completedFuture(new RpcResponsePacket(new RpcException(RpcException.Code.NO_SERVICE_AVAILABLE, "Could not find implementation for service"), null));
             }
@@ -39,8 +39,8 @@ public abstract class BaseServiceManager extends InternalServiceManagerImpl {
         }
     }
 
-    public abstract void invokeRemote(HighChannel invoker, RpcInvocationPacket packet);
+    public abstract void invokeRemote(C invoker, RpcInvocationPacket packet);
 
-    protected abstract HighChannel getChannel(RpcInvocationPacket packet);
+    protected abstract C getChannel(RpcInvocationPacket packet);
 
 }

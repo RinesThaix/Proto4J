@@ -15,8 +15,8 @@ public class RpcClientPerformer extends RpcClient {
 
     @Override
     public CompletionStage<Void> start(String address, int port) {
-        return super.start(address, port).thenAccept(v -> {
-            getServiceManager().registerService(TestService.class, new TestServiceImpl());
-        });
+        return super.start(address, port)
+                .thenCompose(v -> getServiceManager().registerService(TestService.class, new TestServiceImpl()))
+                .thenApply(sid -> null);
     }
 }

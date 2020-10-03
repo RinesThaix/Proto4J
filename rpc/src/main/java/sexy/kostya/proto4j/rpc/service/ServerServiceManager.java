@@ -15,13 +15,13 @@ import java.util.concurrent.ThreadLocalRandom;
  * Created by k.shandurenko on 02.10.2020
  */
 @SuppressWarnings("SynchronizationOnLocalVariableOrMethodParameter")
-public class ServerServiceManager extends BaseServiceManager {
+public class ServerServiceManager<C extends HighChannel> extends BaseServiceManager<C> {
 
-    private final Map<Integer, List<HighChannel>> implementations = new ConcurrentHashMap<>();
-    private final Map<HighChannel, Set<Integer>>  revert          = new ConcurrentHashMap<>();
+    private final Map<Integer, List<C>> implementations = new ConcurrentHashMap<>();
+    private final Map<C, Set<Integer>>  revert          = new ConcurrentHashMap<>();
 
-    public void register(HighChannel channel, int serviceID) {
-        List<HighChannel> list = getOrCreateImplementations(serviceID);
+    public void register(C channel, int serviceID) {
+        List<C> list = getOrCreateImplementations(serviceID);
         synchronized (list) {
             list.add(channel);
             this.implementations.put(serviceID, list); // because of possible synchronization problems
@@ -32,14 +32,14 @@ public class ServerServiceManager extends BaseServiceManager {
         }
     }
 
-    public void unregister(HighChannel channel) {
+    public void unregister(C channel) {
         Set<Integer> set = this.revert.remove(channel);
         if (set == null) {
             return;
         }
         synchronized (set) {
             set.forEach(serviceID -> {
-                List<HighChannel> list = this.implementations.get(serviceID);
+                List<C> list = this.implementations.get(serviceID);
                 if (list == null) {
                     return;
                 }
@@ -53,17 +53,17 @@ public class ServerServiceManager extends BaseServiceManager {
         }
     }
 
-    private List<HighChannel> getOrCreateImplementations(int serviceID) {
+    private List<C> getOrCreateImplementations(int serviceID) {
         return this.implementations.computeIfAbsent(serviceID, sid -> new ArrayList<>());
     }
 
     @Override
-    public void invokeRemote(HighChannel invoker, RpcInvocationPacket packet) {
+    public void invokeRemote(C invoker, RpcInvocationPacket packet) {
         if (packet.isBroadcast()) {
             if (isServiceRegisteredThere(packet.getServiceID())) {
                 invoke(packet);
             }
-            List<HighChannel> channels = this.implementations.get(packet.getServiceID());
+            List<C> channels = this.implementations.get(packet.getServiceID());
             if (channels == null) {
                 return;
             }
@@ -116,8 +116,8 @@ public class ServerServiceManager extends BaseServiceManager {
     }
 
     @Override
-    protected HighChannel getChannel(RpcInvocationPacket packet) {
-        List<HighChannel> list = this.implementations.get(packet.getServiceID());
+    protected C getChannel(RpcInvocationPacket packet) {
+        List<C> list = this.implementations.get(packet.getServiceID());
         if (list == null) {
             return null;
         }

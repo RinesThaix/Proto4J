@@ -38,6 +38,10 @@ public abstract class Proto4jClient<C extends Channel> extends Proto4jSocket<C> 
         return start(address, port);
     }
 
+    public CompletionStage<Void> connect(InetSocketAddress address) {
+        return start(address.getHostName(), address.getPort());
+    }
+
     @Override
     void start0(CompletableFuture<Void> future, String address, int port) throws SocketException {
         InetSocketAddress remoteAddress = new InetSocketAddress(address, port);

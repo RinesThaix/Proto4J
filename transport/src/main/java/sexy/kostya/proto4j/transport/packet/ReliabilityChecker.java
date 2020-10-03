@@ -19,20 +19,22 @@ class ReliabilityChecker {
         Thread thread = new Thread(() -> {
             while (true) {
                 long current = System.currentTimeMillis();
-                this.awaitingPackets.forEach((sn, packet) -> {
-                    if (current - packet.time > DatagramHelper.RELIABILITY_THRESHOLD) {
-                        codec.getEncoder().send(((BufferImpl) packet.buffer).getHandle().array());
-                        packet.time = current;
-                    }
-                });
-                this.awaitingPartialPackets.forEach((sn, map) -> {
-                    map.forEach((id, packet) -> {
+                try {
+                    this.awaitingPackets.forEach((sn, packet) -> {
                         if (current - packet.time > DatagramHelper.RELIABILITY_THRESHOLD) {
                             codec.getEncoder().send(((BufferImpl) packet.buffer).getHandle().array());
                             packet.time = current;
                         }
                     });
-                });
+                    this.awaitingPartialPackets.forEach((sn, map) -> {
+                        map.forEach((id, packet) -> {
+                            if (current - packet.time > DatagramHelper.RELIABILITY_THRESHOLD) {
+                                codec.getEncoder().send(((BufferImpl) packet.buffer).getHandle().array());
+                                packet.time = current;
+                            }
+                        });
+                    });
+                } catch (Throwable ignored) {}
                 try {
                     Thread.sleep(DatagramHelper.RELIABILITY_THRESHOLD >> 2);
                 } catch (InterruptedException ignored) {

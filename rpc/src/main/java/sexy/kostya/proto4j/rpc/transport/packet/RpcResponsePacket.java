@@ -10,7 +10,7 @@ import sexy.kostya.proto4j.transport.highlevel.packet.CallbackProto4jPacket;
 public class RpcResponsePacket extends CallbackProto4jPacket {
 
     private RpcException exception;
-    private byte[] response;
+    private byte[]       response;
 
     public RpcResponsePacket() {
     }

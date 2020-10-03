@@ -9,11 +9,12 @@ import sexy.kostya.proto4j.rpc.transport.packet.RpcServicePacket;
 import sexy.kostya.proto4j.transport.highlevel.HighChannel;
 
 import java.lang.ref.WeakReference;
+import java.util.concurrent.CompletionStage;
 
 /**
  * Created by k.shandurenko on 02.10.2020
  */
-public class ClientServiceManager extends BaseServiceManager {
+public class ClientServiceManager extends BaseServiceManager<HighChannel> {
 
     private final WeakReference<RpcClient> client;
 
@@ -51,9 +52,10 @@ public class ClientServiceManager extends BaseServiceManager {
     }
 
     @Override
-    public <S, I extends S> int registerService(Class<S> serviceInterface, I implementation) {
-        int serviceIdentifier = super.registerService(serviceInterface, implementation);
-        getClient().getChannel().send(new RpcServicePacket(serviceIdentifier));
-        return serviceIdentifier;
+    public <S, I extends S> CompletionStage<Integer> registerService(Class<S> serviceInterface, I implementation) {
+        CompletionStage<Integer> serviceIdentifierFuture = super.registerService(serviceInterface, implementation);
+        return serviceIdentifierFuture
+                .thenCompose(sid -> getClient().getChannel().sendWithCallback(new RpcServicePacket(sid)))
+                .thenApply(packet -> ((RpcServicePacket) packet).getServiceID());
     }
 }

@@ -37,6 +37,7 @@ public interface TestService {
 
     int sumOfAges2(Set<Set<AutoTestData>> datas);
 
+    @Broadcast
     void print(AutoTestDataExtended data);
 
     CompletionStage<Void> testException();

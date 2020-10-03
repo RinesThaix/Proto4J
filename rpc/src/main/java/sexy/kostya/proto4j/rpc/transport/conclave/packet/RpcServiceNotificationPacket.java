@@ -1,22 +1,26 @@
-package sexy.kostya.proto4j.rpc.transport.packet;
+package sexy.kostya.proto4j.rpc.transport.conclave.packet;
 
 import sexy.kostya.proto4j.transport.buffer.Buffer;
-import sexy.kostya.proto4j.transport.highlevel.packet.CallbackProto4jPacket;
 import sexy.kostya.proto4j.transport.highlevel.packet.EnumeratedProto4jPacket;
 
 /**
- * Created by k.shandurenko on 01.10.2020
+ * Created by k.shandurenko on 03.10.2020
  */
-public class RpcServicePacket extends CallbackProto4jPacket {
+public class RpcServiceNotificationPacket extends EnumeratedProto4jPacket {
 
+    private int channelID;
     private int serviceID;
 
-    public RpcServicePacket() {
-
+    public RpcServiceNotificationPacket() {
     }
 
-    public RpcServicePacket(int serviceID) {
+    public RpcServiceNotificationPacket(int channelID, int serviceID) {
+        this.channelID = channelID;
         this.serviceID = serviceID;
+    }
+
+    public int getChannelID() {
+        return channelID;
     }
 
     public int getServiceID() {
@@ -25,16 +29,18 @@ public class RpcServicePacket extends CallbackProto4jPacket {
 
     @Override
     public int getID() {
-        return 3;
+        return 5;
     }
 
     @Override
     public void write(Buffer buffer) {
+        buffer.writeInt(this.channelID);
         buffer.writeInt(this.serviceID);
     }
 
     @Override
     public void read(Buffer buffer) {
+        this.channelID = buffer.readInt();
         this.serviceID = buffer.readInt();
     }
 }

@@ -14,7 +14,7 @@ import sexy.kostya.proto4j.transport.highlevel.packet.PacketHandler;
  */
 public class RpcServer extends BaseProto4jHighServer {
 
-    private final ServerServiceManager serviceManager = new ServerServiceManager();
+    private final ServerServiceManager<HighChannel> serviceManager = new ServerServiceManager<>();
 
     public RpcServer(int workerThreads, int handlerThreads) {
         super(LoggerFactory.getLogger("RpcServer"), workerThreads, handlerThreads);
@@ -23,7 +23,10 @@ public class RpcServer extends BaseProto4jHighServer {
 
             {
                 register(RpcInvocationPacket.class, serviceManager::invokeRemote);
-                register(RpcServicePacket.class, (channel, packet) -> serviceManager.register(channel, packet.getServiceID()));
+                register(RpcServicePacket.class, (channel, packet) -> {
+                    serviceManager.register(channel, packet.getServiceID());
+                    packet.respond(channel, packet);
+                });
             }
 
         });

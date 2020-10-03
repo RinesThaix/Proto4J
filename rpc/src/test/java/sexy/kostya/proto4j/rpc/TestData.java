@@ -10,7 +10,7 @@ public class TestData implements Proto4jSerializable {
 
     private String name;
     private String password;
-    private int age;
+    private int    age;
 
     public TestData() {
 

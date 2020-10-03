@@ -35,6 +35,10 @@ public abstract class Proto4jServer<C extends Channel> extends Proto4jSocket<C> 
         return start("0.0.0.0", port);
     }
 
+    public CompletionStage<Void> start(InetSocketAddress address) {
+        return start(address.getHostName(), address.getPort());
+    }
+
     @Override
     void start0(CompletableFuture<Void> future, String address, int port) throws SocketException {
         super.socket = new DatagramSocket(new InetSocketAddress(address, port));
