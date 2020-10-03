@@ -1,6 +1,7 @@
 package sexy.kostya.proto4j.transport.util;
 
 import io.netty.buffer.ByteBuf;
+import sexy.kostya.proto4j.commons.Proto4jProperties;
 
 import java.util.zip.CRC32;
 
@@ -9,9 +10,9 @@ import java.util.zip.CRC32;
  */
 public class DatagramHelper {
 
-    public final static int    MAX_DATAGRAM_SIZE     = 508;
+    public final static int    MAX_DATAGRAM_SIZE     = Proto4jProperties.getProperty("maxDatagramSize", 508);
     public final static byte[] ZERO_LENGTH_ARRAY     = new byte[0];
-    public final static long   RELIABILITY_THRESHOLD = 10L;
+    public final static long   RELIABILITY_THRESHOLD = Proto4jProperties.getProperty("reliabilityThreshold", 10L);
 
     /**
      * 2 - length
@@ -24,7 +25,7 @@ public class DatagramHelper {
     public final static int CRC_LENGTH    = 4;
 
     public final static int MIN_SEQUENCE_NUMBER = 0;
-    public final static int MAX_SEQUENCE_NUMBER = 2_000_000_000;
+    public final static int MAX_SEQUENCE_NUMBER = Proto4jProperties.getProperty("maxSequenceNumber", 2_000_000_000);
 
     public static boolean isValidSequenceNumber(int seq) {
         return seq >= MIN_SEQUENCE_NUMBER && seq <= MAX_SEQUENCE_NUMBER;

@@ -60,8 +60,8 @@ public abstract class Proto4jClient<C extends Channel> extends Proto4jSocket<C> 
                     DatagramPacket packet = new DatagramPacket(array, array.length);
                     super.socket.receive(packet);
                     getWorkers().execute(() -> {
-                        ByteBuf buffer = Unpooled.wrappedBuffer(packet.getData(), packet.getOffset(), packet.getLength());
-                        InetSocketAddress addr = new InetSocketAddress(packet.getAddress(), packet.getPort());
+                        ByteBuf           buffer = Unpooled.wrappedBuffer(packet.getData(), packet.getOffset(), packet.getLength());
+                        InetSocketAddress addr   = new InetSocketAddress(packet.getAddress(), packet.getPort());
                         if (!remoteAddress.equals(addr)) {
                             getLogger().warn("Received packet from an unknown address: {}", addr);
                             return;

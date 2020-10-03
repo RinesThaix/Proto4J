@@ -110,69 +110,48 @@ public class ConclaveServerServiceManager extends BaseServiceManager<ConclaveCha
 
     @Override
     public void send(RpcInvocationPacket packet) {
-        if (isServiceRegisteredThere(packet.getServiceID()) && packet.canBeExecutedLocally()) {
+        ConclaveChannel channel = getChannel(packet);
+        if (channel == this.self) {
             invoke(packet);
+        } else if (channel == null || !channel.isActive()) {
+            throw new NullPointerException("Could not find implementation for service");
         } else {
-            ConclaveChannel channel = getChannel(packet);
-            if (channel == this.self) {
-                invoke(packet);
-            } else if (channel == null || !channel.isActive()) {
-                throw new NullPointerException("Could not find implementation for service");
-            } else {
-                channel.send(packet);
-            }
+            channel.send(packet);
         }
     }
 
     @Override
     public CompletionStage<RpcResponsePacket> sendWithCallback(RpcInvocationPacket packet) {
-        if (isServiceRegisteredThere(packet.getServiceID()) && packet.canBeExecutedLocally()) {
+        ConclaveChannel channel = getChannel(packet);
+        if (channel == this.self) {
             return invoke(packet);
+        } else if (channel == null || !channel.isActive()) {
+            return CompletableFuture.completedFuture(new RpcResponsePacket(new RpcException(RpcException.Code.NO_SERVICE_AVAILABLE, "Could not find implementation for service"), null));
         } else {
-            ConclaveChannel channel = getChannel(packet);
-            if (channel == this.self) {
-                return invoke(packet);
-            } else if (channel == null || !channel.isActive()) {
-                return CompletableFuture.completedFuture(new RpcResponsePacket(new RpcException(RpcException.Code.NO_SERVICE_AVAILABLE, "Could not find implementation for service"), null));
-            } else {
-                return channel.sendWithCallback(packet).thenApply(p -> (RpcResponsePacket) p);
-            }
+            return channel.sendWithCallback(packet).thenApply(p -> (RpcResponsePacket) p);
         }
     }
 
     @Override
     public void invokeRemote(ConclaveChannel invoker, RpcInvocationPacket packet) {
         if (!packet.isBroadcast()) {
-            if (isServiceRegisteredThere(packet.getServiceID())) {
-                invoke(packet).thenAccept(response -> {
-                    if (response == null) {
-                        return;
-                    }
-                    Preconditions.checkState(packet.getCallbackID() != 0); // ensure it's awaiting response
+            ConclaveChannel channel    = getChannel(packet);
+            short           callbackID = packet.getCallbackID();
+            if (channel == null || !channel.isActive()) {
+                if (callbackID != 0) {
+                    packet.respond(invoker, new RpcResponsePacket(new RpcException(RpcException.Code.NO_SERVICE_AVAILABLE, "Could not find implementation for service"), null));
+                }
+                return;
+            }
+            if (callbackID == 0) {
+                channel.send(packet);
+            } else {
+                channel.sendWithCallback(packet).thenAccept(response -> {
+                    packet.setCallbackID(callbackID);
                     packet.respond(invoker, response);
                 });
-            } else {
-                ConclaveChannel channel    = getChannel(packet);
-                short           callbackID = packet.getCallbackID();
-                if (channel == null || !channel.isActive()) {
-                    if (callbackID != 0) {
-                        packet.respond(invoker, new RpcResponsePacket(new RpcException(RpcException.Code.NO_SERVICE_AVAILABLE, "Could not find implementation for service"), null));
-                    }
-                    return;
-                }
-                if (callbackID == 0) {
-                    channel.send(packet);
-                } else {
-                    channel.sendWithCallback(packet).thenAccept(response -> {
-                        packet.setCallbackID(callbackID);
-                        packet.respond(invoker, response);
-                    });
-                }
             }
         } else if (invoker.isServer()) {
-            if (isServiceRegisteredThere(packet.getServiceID())) {
-                invoke(packet);
-            }
             List<Integer> list = this.servers.get(this.self).implementations.get(packet.getServiceID());
             if (list == null) {
                 return;
@@ -215,9 +194,6 @@ public class ConclaveServerServiceManager extends BaseServiceManager<ConclaveCha
                 }
             }
         } else {
-            if (isServiceRegisteredThere(packet.getServiceID())) {
-                invoke(packet);
-            }
             short callbackID = packet.getCallbackID();
             if (callbackID == 0) {
                 RpcConclaveServer server = getServer();

@@ -1,6 +1,5 @@
 package sexy.kostya.proto4j.rpc.service;
 
-import com.google.common.base.Preconditions;
 import sexy.kostya.proto4j.exception.RpcException;
 import sexy.kostya.proto4j.rpc.transport.packet.RpcInvocationPacket;
 import sexy.kostya.proto4j.rpc.transport.packet.RpcResponsePacket;
@@ -60,9 +59,6 @@ public class ServerServiceManager<C extends HighChannel> extends BaseServiceMana
     @Override
     public void invokeRemote(C invoker, RpcInvocationPacket packet) {
         if (packet.isBroadcast()) {
-            if (isServiceRegisteredThere(packet.getServiceID())) {
-                invoke(packet);
-            }
             List<C> channels = this.implementations.get(packet.getServiceID());
             if (channels == null) {
                 return;
@@ -86,31 +82,21 @@ public class ServerServiceManager<C extends HighChannel> extends BaseServiceMana
                 }
             }
         } else {
-            if (isServiceRegisteredThere(packet.getServiceID())) {
-                invoke(packet).thenAccept(response -> {
-                    if (response == null) {
-                        return;
-                    }
-                    Preconditions.checkState(packet.getCallbackID() != 0); // ensure it's awaiting response
+            HighChannel channel    = getChannel(packet);
+            short       callbackID = packet.getCallbackID();
+            if (channel == null || !channel.isActive()) {
+                if (callbackID != 0) {
+                    packet.respond(invoker, new RpcResponsePacket(new RpcException(RpcException.Code.NO_SERVICE_AVAILABLE, "Could not find implementation for service"), null));
+                }
+                return;
+            }
+            if (callbackID == 0) {
+                channel.send(packet);
+            } else {
+                channel.sendWithCallback(packet).thenAccept(response -> {
+                    packet.setCallbackID(callbackID);
                     packet.respond(invoker, response);
                 });
-            } else {
-                HighChannel channel    = getChannel(packet);
-                short       callbackID = packet.getCallbackID();
-                if (channel == null || !channel.isActive()) {
-                    if (callbackID != 0) {
-                        packet.respond(invoker, new RpcResponsePacket(new RpcException(RpcException.Code.NO_SERVICE_AVAILABLE, "Could not find implementation for service"), null));
-                    }
-                    return;
-                }
-                if (callbackID == 0) {
-                    channel.send(packet);
-                } else {
-                    channel.sendWithCallback(packet).thenAccept(response -> {
-                        packet.setCallbackID(callbackID);
-                        packet.respond(invoker, response);
-                    });
-                }
             }
         }
     }

@@ -3,7 +3,7 @@ package sexy.kostya.proto4j.transport.packet;
 import com.google.common.base.Preconditions;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
-import sexy.kostya.proto4j.exception.Proto4jException;
+import sexy.kostya.proto4j.commons.Proto4jException;
 import sexy.kostya.proto4j.transport.buffer.Buffer;
 import sexy.kostya.proto4j.transport.buffer.BufferImpl;
 import sexy.kostya.proto4j.transport.util.DatagramHelper;

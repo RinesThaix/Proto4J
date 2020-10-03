@@ -1,5 +1,6 @@
 package sexy.kostya.proto4j.transport.highlevel;
 
+import sexy.kostya.proto4j.commons.Proto4jProperties;
 import sexy.kostya.proto4j.transport.highlevel.packet.CallbackProto4jPacket;
 
 import java.util.HashSet;
@@ -16,6 +17,7 @@ public class CallbacksRegistry {
     private final Map<Short, CallbackData> callbacks = new ConcurrentHashMap<>();
 
     public CallbacksRegistry() {
+        long delay = Proto4jProperties.getProperty("callbacksRegistryDelay", 100L);
         Thread thread = new Thread(() -> {
             Set<Short> toBeRemoved = new HashSet<>();
             while (true) {
@@ -28,7 +30,7 @@ public class CallbacksRegistry {
                 });
                 toBeRemoved.forEach(this.callbacks::remove);
                 try {
-                    Thread.sleep(100L);
+                    Thread.sleep(delay);
                 } catch (InterruptedException ignored) {
                 }
             }

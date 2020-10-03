@@ -34,7 +34,8 @@ class ReliabilityChecker {
                             }
                         });
                     });
-                } catch (Throwable ignored) {}
+                } catch (Throwable ignored) {
+                }
                 try {
                     Thread.sleep(DatagramHelper.RELIABILITY_THRESHOLD >> 2);
                 } catch (InterruptedException ignored) {

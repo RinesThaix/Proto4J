@@ -1,5 +1,7 @@
 package sexy.kostya.proto4j.exception;
 
+import sexy.kostya.proto4j.commons.Proto4jException;
+
 /**
  * Created by k.shandurenko on 30.09.2020
  */

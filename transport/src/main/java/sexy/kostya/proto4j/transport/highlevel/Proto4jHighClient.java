@@ -2,6 +2,7 @@ package sexy.kostya.proto4j.transport.highlevel;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import sexy.kostya.proto4j.commons.Proto4jException;
 import sexy.kostya.proto4j.transport.highlevel.packet.CallbackProto4jPacket;
 import sexy.kostya.proto4j.transport.highlevel.packet.EnumeratedProto4jPacket;
 import sexy.kostya.proto4j.transport.highlevel.packet.PacketHandler;
@@ -12,6 +13,7 @@ import sexy.kostya.proto4j.transport.highlevel.packet.def.Packet2Disconnect;
 import sexy.kostya.proto4j.transport.lowlevel.Proto4jClient;
 import sexy.kostya.proto4j.transport.packet.Proto4jPacket;
 
+import java.net.SocketException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
@@ -104,7 +106,9 @@ public abstract class Proto4jHighClient<C extends HighChannel> extends Proto4jCl
 
     @Override
     protected boolean shutdownInternally() {
-        getChannel().send(new Packet2Disconnect(), Proto4jPacket.Flag.UNRELIABLE);
+        try {
+            getChannel().send(new Packet2Disconnect(), Proto4jPacket.Flag.UNRELIABLE);
+        } catch (Proto4jException ignored) {}
         if (!super.shutdownInternally()) {
             return false;
         }

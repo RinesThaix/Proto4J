@@ -13,6 +13,7 @@
         <module>scheme</module>
         <module>rpc</module>
         <module>serialization</module>
+        <module>commons</module>
     </modules>
 
 

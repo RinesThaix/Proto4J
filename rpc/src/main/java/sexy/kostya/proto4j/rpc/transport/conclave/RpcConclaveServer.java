@@ -1,6 +1,8 @@
 package sexy.kostya.proto4j.rpc.transport.conclave;
 
+import com.google.common.base.Preconditions;
 import org.slf4j.LoggerFactory;
+import sexy.kostya.proto4j.commons.Proto4jProperties;
 import sexy.kostya.proto4j.rpc.service.ConclaveServerServiceManager;
 import sexy.kostya.proto4j.rpc.transport.conclave.packet.RpcDisconnectNotificationPacket;
 import sexy.kostya.proto4j.rpc.transport.conclave.packet.RpcServerPacket;
@@ -34,6 +36,7 @@ public class RpcConclaveServer extends Proto4jHighServer<ConclaveChannel> {
 
     public RpcConclaveServer(List<InetSocketAddress> allServersAddresses, int workerThreads, int handlerThreads) {
         super(LoggerFactory.getLogger("RpcConclaveServer"), workerThreads, handlerThreads);
+        Preconditions.checkArgument(!allServersAddresses.isEmpty(), "There must be at least one server address");
         this.allServersAddresses = allServersAddresses;
         this.self = new ConclaveChannel(0, null, null);
         this.channels.put(0, this.self);
@@ -71,9 +74,12 @@ public class RpcConclaveServer extends Proto4jHighServer<ConclaveChannel> {
         return super.start(address, port).thenAccept(v -> {
             InetSocketAddress myAddress = new InetSocketAddress(address, port);
             this.allServersAddresses.stream().filter(addr -> !addr.equals(myAddress)).forEach(addr -> {
-                RpcConclaveServerClient client = new RpcConclaveServerClient(2, 2);
+                RpcConclaveServerClient client = new RpcConclaveServerClient(
+                        Proto4jProperties.getProperty("conclaveWorkers", 2),
+                        Proto4jProperties.getProperty("conclaveHandlers", 2)
+                );
                 try {
-                    client.start(addr.getHostName(), addr.getPort()).toCompletableFuture().get(1, TimeUnit.SECONDS);
+                    client.start(addr.getHostName(), addr.getPort()).toCompletableFuture().get(Proto4jProperties.getProperty("conclaveTimeout", 1000L), TimeUnit.MILLISECONDS);
                 } catch (Exception ignored) {
                     client.shutdown();
                 }

@@ -34,7 +34,7 @@ public class RpcTest {
         Assert.assertSame(0, svc.get());
 
         svc.set(2, 3);
-        Thread.sleep(100);
+        Thread.sleep(10);
         Assert.assertSame(5, svc.get());
 
         svc.setWithFuture(17, 10).toCompletableFuture().get();
@@ -52,7 +52,7 @@ public class RpcTest {
         performer2.connect("127.0.0.1", 6775).toCompletableFuture().get();
 
         svc.broadcastTest();
-        Thread.sleep(100);
+        Thread.sleep(10);
         Assert.assertSame(-1, svc.get());
 
         svc.broadcastTest(true);
@@ -116,13 +116,13 @@ public class RpcTest {
 
         user.shutdown();
         server.shutdown();
-        Thread.sleep(100);
 
         Assert.assertFalse(user.getChannel().isActive());
     }
 
     @Test
-    public void testConclave() throws ExecutionException, InterruptedException {
+    public void testConclaveServers() throws ExecutionException, InterruptedException {
+        System.setProperty("proto4j.conclaveTimeout", "100");
         List<InetSocketAddress> serversAddresses = Lists.newArrayList(
                 new InetSocketAddress("127.0.0.1", 6775),
                 new InetSocketAddress("127.0.0.1", 6776)
@@ -165,6 +165,45 @@ public class RpcTest {
         performer2.shutdown();
         srv2.shutdown();
         srv1.shutdown();
+    }
+
+    @Test
+    public void testConclaveFull() throws ExecutionException, InterruptedException {
+        System.setProperty("proto4j.conclaveTimeout", "100");
+        List<InetSocketAddress> serversAddresses = Lists.newArrayList(
+                new InetSocketAddress("127.0.0.1", 6775),
+                new InetSocketAddress("127.0.0.1", 6776)
+        );
+
+        RpcConclaveServer srv1 = new RpcConclaveServer(serversAddresses, 2, 2);
+        srv1.start(serversAddresses.get(0)).toCompletableFuture().get();
+
+        RpcConclaveServer srv2 = new RpcConclaveServer(serversAddresses, 2, 2);
+        srv2.start(serversAddresses.get(1)).toCompletableFuture().get();
+
+        RpcConclaveClientPerformer performer1 = new RpcConclaveClientPerformer(serversAddresses, 2, 2);
+        performer1.connect().toCompletableFuture().get();
+
+        RpcConclaveClientUser user1 = new RpcConclaveClientUser(serversAddresses, 2, 2);
+        user1.connect().toCompletableFuture().get();
+
+        RpcConclaveClientUser user2 = new RpcConclaveClientUser(serversAddresses, 2, 2);
+        user2.connect().toCompletableFuture().get();
+
+        TestService svc1 = user1.getService();
+        TestService svc2 = user2.getService();
+
+        svc1.setWithFuture(10, 20).toCompletableFuture().get();
+        Assert.assertEquals(30, svc2.get());
+
+        Assert.assertEquals(15, svc1.sumArray(new int[]{3, 7, 5}));
+        Assert.assertEquals(20, svc2.sumList(Lists.newArrayList(-100, 20, 10, 5, 15, 70)));
+
+        srv1.shutdown();
+        user1.shutdown();
+        user2.shutdown();
+        performer1.shutdown();
+        srv2.shutdown();
     }
 
 }

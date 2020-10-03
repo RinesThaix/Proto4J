@@ -1,5 +1,6 @@
 package sexy.kostya.proto4j.exception;
 
+import sexy.kostya.proto4j.commons.Proto4jException;
 import sexy.kostya.proto4j.rpc.BufferSerializable;
 import sexy.kostya.proto4j.transport.buffer.Buffer;
 

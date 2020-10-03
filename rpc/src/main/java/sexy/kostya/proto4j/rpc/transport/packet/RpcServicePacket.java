@@ -2,7 +2,6 @@ package sexy.kostya.proto4j.rpc.transport.packet;
 
 import sexy.kostya.proto4j.transport.buffer.Buffer;
 import sexy.kostya.proto4j.transport.highlevel.packet.CallbackProto4jPacket;
-import sexy.kostya.proto4j.transport.highlevel.packet.EnumeratedProto4jPacket;
 
 /**
  * Created by k.shandurenko on 01.10.2020

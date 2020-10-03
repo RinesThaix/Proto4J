@@ -1,4 +1,4 @@
-package sexy.kostya.proto4j.exception;
+package sexy.kostya.proto4j.commons;
 
 /**
  * Created by k.shandurenko on 30.09.2020

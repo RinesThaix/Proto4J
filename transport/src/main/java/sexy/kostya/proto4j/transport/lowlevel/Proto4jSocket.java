@@ -1,7 +1,7 @@
 package sexy.kostya.proto4j.transport.lowlevel;
 
 import org.slf4j.Logger;
-import sexy.kostya.proto4j.exception.Proto4jException;
+import sexy.kostya.proto4j.commons.Proto4jException;
 import sexy.kostya.proto4j.transport.Channel;
 import sexy.kostya.proto4j.transport.NamedThreadFactory;
 import sexy.kostya.proto4j.transport.packet.PacketCodec;

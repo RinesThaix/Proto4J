@@ -2,6 +2,7 @@ package sexy.kostya.proto4j.transport.highlevel;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import sexy.kostya.proto4j.commons.Proto4jProperties;
 import sexy.kostya.proto4j.transport.highlevel.packet.CallbackProto4jPacket;
 import sexy.kostya.proto4j.transport.highlevel.packet.EnumeratedProto4jPacket;
 import sexy.kostya.proto4j.transport.highlevel.packet.PacketHandler;
@@ -61,6 +62,8 @@ public abstract class Proto4jHighServer<C extends HighChannel> extends Proto4jSe
 
     public Proto4jHighServer(int workerThreads, int handlerThreads) {
         this(LoggerFactory.getLogger("Proto4j HighServer"), workerThreads, handlerThreads);
+        long receivedTimeout = Proto4jProperties.getProperty("highTimeout", 10_000L);
+        long pingDelay       = Proto4jProperties.getProperty("highPingDelay", 1_000L);
         Thread thread = new Thread(() -> {
             Set<InetSocketAddress> toBeRemoved = new HashSet<>();
             while (true) {
@@ -69,18 +72,18 @@ public abstract class Proto4jHighServer<C extends HighChannel> extends Proto4jSe
                     if (!channel.isHandshaked()) {
                         return;
                     }
-                    if (current - channel.getLastPacketReceived() > 10_000L) {
+                    if (current - channel.getLastPacketReceived() > receivedTimeout) {
                         disconnect(channel, true, "Timed out", toBeRemoved);
                         return;
                     }
-                    if (current - channel.getLastPacketReceived() > 1_000L || current - channel.getLastPacketSent() > 1_000L) {
+                    if (current - channel.getLastPacketReceived() > pingDelay || current - channel.getLastPacketSent() > pingDelay) {
                         channel.send(new Packet1Ping());
                     }
                 });
                 toBeRemoved.forEach(super.channel::remove);
                 toBeRemoved.clear();
                 try {
-                    Thread.sleep(1_000L);
+                    Thread.sleep(pingDelay);
                 } catch (InterruptedException ignored) {
                 }
             }

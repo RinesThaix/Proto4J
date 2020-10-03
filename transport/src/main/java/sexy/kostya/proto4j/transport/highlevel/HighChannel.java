@@ -1,5 +1,6 @@
 package sexy.kostya.proto4j.transport.highlevel;
 
+import sexy.kostya.proto4j.commons.Proto4jProperties;
 import sexy.kostya.proto4j.transport.Channel;
 import sexy.kostya.proto4j.transport.buffer.Buffer;
 import sexy.kostya.proto4j.transport.highlevel.packet.CallbackProto4jPacket;
@@ -15,6 +16,8 @@ import java.util.concurrent.TimeUnit;
  * Created by k.shandurenko on 01.10.2020
  */
 public class HighChannel extends Channel {
+
+    private final static long INITIAL_DELAY = Proto4jProperties.getProperty("callbacksInitialDelay", 500L);
 
     private final CallbacksRegistry callbacksRegistry;
 
@@ -68,7 +71,7 @@ public class HighChannel extends Channel {
     }
 
     public CompletionStage<CallbackProto4jPacket> sendWithCallback(CallbackProto4jPacket packet) {
-        return sendWithCallback(packet, 500L, TimeUnit.MILLISECONDS);
+        return sendWithCallback(packet, INITIAL_DELAY, TimeUnit.MILLISECONDS);
     }
 
     public CompletionStage<CallbackProto4jPacket> sendWithCallback(CallbackProto4jPacket packet, long time, TimeUnit timeUnit) {
