@@ -2,6 +2,7 @@ package sexy.kostya.proto4j.serialization;
 
 import sexy.kostya.proto4j.commons.LambdaReflection;
 import sexy.kostya.proto4j.serialization.annotation.AutoSerializable;
+import sexy.kostya.proto4j.serialization.annotation.Nullable;
 import sexy.kostya.proto4j.serialization.annotation.Transient;
 import sexy.kostya.proto4j.serialization.exception.Proto4jSerializationException;
 
@@ -62,7 +63,24 @@ public abstract class BaseSerializer<B> implements Serializer<B> {
     }
 
     @Override
-    public <T> BiConsumer<B, T> getWriter(Type type) {
+    public <T> BiConsumer<B, T> getWriter(Type type, boolean nullable) {
+        BiConsumer<B, T> writer = getWriter0(type);
+        if (nullable) {
+            BiConsumer<B, Boolean> booleanWriter = getWriter0(boolean.class);
+            return (buffer, val) -> {
+                if (val != null) {
+                    booleanWriter.accept(buffer, true);
+                    writer.accept(buffer, val);
+                } else {
+                    booleanWriter.accept(buffer, false);
+                }
+            };
+        } else {
+            return writer;
+        }
+    }
+
+    public <T> BiConsumer<B, T> getWriter0(Type type) {
         BaseTypeSerializable<B, ?> serializable = baseTypes.get(type);
         if (serializable != null) {
             return ((BaseTypeSerializable<B, T>) serializable).getWriter();
@@ -82,7 +100,7 @@ public abstract class BaseSerializer<B> implements Serializer<B> {
                         if (!parent.isAnnotationPresent(AutoSerializable.class)) {
                             throw new Proto4jSerializationException(clazz.getSimpleName() + " can't be serialized: it's parent " + parent.getSimpleName() + " is not annotated with @AutoSerializable");
                         }
-                        parentWriter = getWriter(parent);
+                        parentWriter = getWriter(parent, false);
                     }
 
                     Map<Field, Function<T, Object>>   getters = new HashMap<>();
@@ -96,7 +114,7 @@ public abstract class BaseSerializer<B> implements Serializer<B> {
                         }
                         Type fType = f.getGenericType();
                         getters.put(f, getFieldValue(clazz, f));
-                        writers.put(f, getWriter(fType));
+                        writers.put(f, getWriter(fType, f.isAnnotationPresent(Nullable.class)));
                     }
                     return (buffer, val) -> {
                         if (parentWriter != null) {
@@ -110,8 +128,8 @@ public abstract class BaseSerializer<B> implements Serializer<B> {
                 }
                 if (clazz.isArray()) {
                     Class                  elType    = clazz.getComponentType();
-                    BiConsumer<B, Object>  elWriter  = getWriter(elType);
-                    BiConsumer<B, Integer> intWriter = getWriter(int.class);
+                    BiConsumer<B, Object>  elWriter  = getWriter(elType, false);
+                    BiConsumer<B, Integer> intWriter = getWriter(int.class, false);
                     return (buffer, val) -> {
                         Object[] casted = (Object[]) val;
                         int      size   = casted.length;
@@ -129,8 +147,8 @@ public abstract class BaseSerializer<B> implements Serializer<B> {
                     if (Collection.class.isAssignableFrom(clazz)) {
                         Type elType = parameterizedType.getActualTypeArguments()[0];
 
-                        BiConsumer<B, Object>  elWriter  = getWriter(elType);
-                        BiConsumer<B, Integer> intWriter = getWriter(int.class);
+                        BiConsumer<B, Object>  elWriter  = getWriter(elType, false);
+                        BiConsumer<B, Integer> intWriter = getWriter(int.class, false);
                         return (buffer, val) -> {
                             Collection col = (Collection) val;
                             intWriter.accept(buffer, col.size());
@@ -141,9 +159,9 @@ public abstract class BaseSerializer<B> implements Serializer<B> {
                         Type keyType   = parameterizedType.getActualTypeArguments()[0];
                         Type valueType = parameterizedType.getActualTypeArguments()[1];
 
-                        BiConsumer<B, Object>  keyWriter   = getWriter(keyType);
-                        BiConsumer<B, Object>  valueWriter = getWriter(valueType);
-                        BiConsumer<B, Integer> intWriter   = getWriter(int.class);
+                        BiConsumer<B, Object>  keyWriter   = getWriter(keyType, false);
+                        BiConsumer<B, Object>  valueWriter = getWriter(valueType, false);
+                        BiConsumer<B, Integer> intWriter   = getWriter(int.class, false);
                         return (buffer, val) -> {
                             Map map = (Map) val;
                             intWriter.accept(buffer, map.size());
@@ -162,12 +180,22 @@ public abstract class BaseSerializer<B> implements Serializer<B> {
     }
 
     @Override
-    public <T> Function<B, T> getReader(Type type) {
-        BiFunction<B, T, T> internal = getInternalReader(type);
+    public <T> Function<B, T> getReader(Type type, boolean nullable) {
+        BiFunction<B, T, T> internal = getInternalReader(type, nullable);
         return buffer -> internal.apply(buffer, null);
     }
 
-    private <T> BiFunction<B, T, T> getInternalReader(Type type) {
+    private <T> BiFunction<B, T, T> getInternalReader(Type type, boolean nullable) {
+        BiFunction<B, T, T> reader = getInternalReader0(type);
+        if (nullable) {
+            Function<B, Boolean> booleanReader = getReader(boolean.class, false);
+            return (buffer, initial) -> booleanReader.apply(buffer) ? reader.apply(buffer, initial) : null;
+        } else {
+            return reader;
+        }
+    }
+
+    private <T> BiFunction<B, T, T> getInternalReader0(Type type) {
         BaseTypeSerializable<B, ?> serializable = baseTypes.get(type);
         if (serializable != null) {
             return (buf, initial) -> ((BaseTypeSerializable<B, T>) serializable).getReader().apply(buf);
@@ -191,11 +219,11 @@ public abstract class BaseSerializer<B> implements Serializer<B> {
                     if (!parent.isAnnotationPresent(AutoSerializable.class)) {
                         throw new Proto4jSerializationException(clazz.getSimpleName() + " can't be deserialized: it's parent " + parent.getSimpleName() + " is not annotated with @AutoSerializable");
                     }
-                    parentReader = getInternalReader(parent);
+                    parentReader = getInternalReader(parent, false);
                 }
 
                 Map<Field, BiConsumer<T, Object>>         setters     = new HashMap<>();
-                Map<Field, BiFunction<B, Object, Object>> readers     = new HashMap<>();
+                Map<Field, Function<B, Object>> readers     = new HashMap<>();
                 Supplier<T>                               constructor = getConstructor(clazz);
                 for (Field f : clazz.getDeclaredFields()) {
                     if (f.isSynthetic() || (f.getModifiers() & Modifier.STATIC) != 0) {
@@ -206,24 +234,21 @@ public abstract class BaseSerializer<B> implements Serializer<B> {
                     }
                     Type fType = f.getGenericType();
                     setters.put(f, setFieldValue(clazz, f));
-                    readers.put(f, getInternalReader(fType));
+                    readers.put(f, getReader(fType, f.isAnnotationPresent(Nullable.class)));
                 }
                 return (buffer, initial) -> {
                     T val = initial != null ? initial : constructor.get();
                     if (parentReader != null) {
                         parentReader.apply(buffer, val);
                     }
-                    setters.forEach((f, setter) -> {
-                        BiFunction<B, Object, Object> reader = readers.get(f);
-                        setter.accept(val, reader.apply(buffer, null));
-                    });
+                    setters.forEach((f, setter) -> setter.accept(val, readers.get(f).apply(buffer)));
                     return val;
                 };
             }
             if (clazz.isArray()) {
                 Class                           elType    = clazz.getComponentType();
-                BiFunction<B, Object, Object>   elReader  = getInternalReader(elType);
-                BiFunction<B, Integer, Integer> intReader = getInternalReader(int.class);
+                BiFunction<B, Object, Object>   elReader  = getInternalReader(elType, false);
+                BiFunction<B, Integer, Integer> intReader = getInternalReader(int.class, false);
                 return (buffer, initial) -> {
                     int      size   = intReader.apply(buffer, null);
                     Object   array  = Array.newInstance(elType, size);
@@ -242,8 +267,8 @@ public abstract class BaseSerializer<B> implements Serializer<B> {
                 if (List.class.isAssignableFrom(clazz)) {
                     Type elType = parameterizedType.getActualTypeArguments()[0];
 
-                    BiFunction<B, Object, Object>   elReader  = getInternalReader(elType);
-                    BiFunction<B, Integer, Integer> intReader = getInternalReader(int.class);
+                    BiFunction<B, Object, Object>   elReader  = getInternalReader(elType, false);
+                    BiFunction<B, Integer, Integer> intReader = getInternalReader(int.class, false);
                     return (buffer, initial) -> {
                         int  size = intReader.apply(buffer, null);
                         List list = new ArrayList(size);
@@ -256,8 +281,8 @@ public abstract class BaseSerializer<B> implements Serializer<B> {
                 if (Set.class.isAssignableFrom(clazz)) {
                     Type elType = parameterizedType.getActualTypeArguments()[0];
 
-                    BiFunction<B, Object, Object>   elReader  = getInternalReader(elType);
-                    BiFunction<B, Integer, Integer> intReader = getInternalReader(int.class);
+                    BiFunction<B, Object, Object>   elReader  = getInternalReader(elType, false);
+                    BiFunction<B, Integer, Integer> intReader = getInternalReader(int.class, false);
                     return (buffer, initial) -> {
                         int size = intReader.apply(buffer, null);
                         Set set  = new HashSet(size);
@@ -271,9 +296,9 @@ public abstract class BaseSerializer<B> implements Serializer<B> {
                     Type keyType   = parameterizedType.getActualTypeArguments()[0];
                     Type valueType = parameterizedType.getActualTypeArguments()[1];
 
-                    BiFunction<B, Object, Object>   keyReader   = getInternalReader(keyType);
-                    BiFunction<B, Object, Object>   valueReader = getInternalReader(valueType);
-                    BiFunction<B, Integer, Integer> intReader   = getInternalReader(int.class);
+                    BiFunction<B, Object, Object>   keyReader   = getInternalReader(keyType, false);
+                    BiFunction<B, Object, Object>   valueReader = getInternalReader(valueType, false);
+                    BiFunction<B, Integer, Integer> intReader   = getInternalReader(int.class, false);
                     return (buffer, initial) -> {
                         int size = intReader.apply(buffer, null);
                         Map map  = new HashMap(size);

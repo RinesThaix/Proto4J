@@ -29,8 +29,8 @@ public class SerializationTest {
     private <S> void exception(Class<S> clazz) {
         Serializer<Buffer> serializer = BufferSerializer.getInstance();
         try {
-            serializer.getReader(clazz);
-            serializer.getWriter(clazz);
+            serializer.getReader(clazz, true);
+            serializer.getWriter(clazz, true);
         } catch (Proto4jSerializationException ignored) {
             return; // ok
         }
@@ -39,8 +39,8 @@ public class SerializationTest {
 
     private <S extends Proto4jSerializable> void ok(Class<S> clazz, S serializable) {
         Serializer<Buffer>    serializer = BufferSerializer.getInstance();
-        Function<Buffer, S>   reader     = serializer.getReader(clazz);
-        BiConsumer<Buffer, S> writer     = serializer.getWriter(clazz);
+        Function<Buffer, S>   reader     = serializer.getReader(clazz, false);
+        BiConsumer<Buffer, S> writer     = serializer.getWriter(clazz, false);
         try (Buffer buffer = Buffer.newBuffer()) {
             writer.accept(buffer, serializable);
             S newSerializable = reader.apply(buffer);

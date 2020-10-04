@@ -10,6 +10,7 @@ import sexy.kostya.proto4j.rpc.service.annotation.MethodIdentifier;
 import sexy.kostya.proto4j.rpc.service.annotation.Proto4jService;
 import sexy.kostya.proto4j.rpc.transport.packet.RpcInvocationPacket;
 import sexy.kostya.proto4j.rpc.transport.packet.RpcResponsePacket;
+import sexy.kostya.proto4j.serialization.annotation.Nullable;
 import sexy.kostya.proto4j.transport.buffer.Buffer;
 import sexy.kostya.proto4j.transport.buffer.BufferImpl;
 import sexy.kostya.proto4j.transport.util.DatagramHelper;
@@ -87,9 +88,22 @@ public abstract class InternalServiceManagerImpl implements InternalServiceManag
                     } else {
                         methodIdentifier = hash(method);
                     }
+
+                    Set<Integer>   nullableParams   = new HashSet<>();
+                    Annotation[][] paramAnnotations = method.getParameterAnnotations();
+                    for (int i = 0; i < paramAnnotations.length; ++i) {
+                        for (int j = 0; j < paramAnnotations[i].length; ++j) {
+                            Annotation ann = paramAnnotations[i][j];
+                            if (ann.annotationType() == Nullable.class) {
+                                nullableParams.add(i);
+                            }
+                        }
+                    }
+                    boolean nullableMethod = method.isAnnotationPresent(Nullable.class);
+
                     Function[] readers = new Function[parameterTypes.length];
                     for (int i = 0; i < parameterTypes.length; ++i) {
-                        readers[i] = BufferSerializer.getInstance().getReader(parameterTypes[i]);
+                        readers[i] = BufferSerializer.getInstance().getReader(parameterTypes[i], nullableParams.contains(i));
                     }
                     Function<Object[], Object>                invocation = getMethodInvocation(implementation, method);
                     Function<byte[], CompletionStage<byte[]>> func;
@@ -100,7 +114,7 @@ public abstract class InternalServiceManagerImpl implements InternalServiceManag
                         };
                     } else if (isVoidCompletionStage(returnType)) {
                         returnType = ((ParameterizedType) returnType).getActualTypeArguments()[0];
-                        BiConsumer<Buffer, Object> writer = BufferSerializer.getInstance().getWriter(returnType);
+                        BiConsumer<Buffer, Object> writer = BufferSerializer.getInstance().getWriter(returnType, nullableMethod);
                         func = bytes -> {
                             Object[]                  args   = deserializeArguments(bytes, readers);
                             CompletableFuture<byte[]> result = new CompletableFuture<>();
@@ -125,7 +139,7 @@ public abstract class InternalServiceManagerImpl implements InternalServiceManag
                         if (returnType instanceof Class) {
                             returnType = Primitives.wrap((Class) returnType);
                         }
-                        BiConsumer<Buffer, Object> writer = BufferSerializer.getInstance().getWriter(returnType);
+                        BiConsumer<Buffer, Object> writer = BufferSerializer.getInstance().getWriter(returnType, nullableMethod);
                         func = bytes -> {
                             Object[] args = deserializeArguments(bytes, readers);
                             try (Buffer buffer = Buffer.newBuffer()) {
@@ -134,7 +148,7 @@ public abstract class InternalServiceManagerImpl implements InternalServiceManag
                                     return CompletableFuture.completedFuture(((BufferImpl) buffer).getHandle().array());
                                 } catch (Throwable throwable) {
                                     CompletableFuture<byte[]> result = new CompletableFuture<>();
-                                    result.completeExceptionally(throwable);
+                                    result.completeExceptionally(new Exception("Could not perform serialization", throwable));
                                     return result;
                                 }
                             }
@@ -229,14 +243,19 @@ public abstract class InternalServiceManagerImpl implements InternalServiceManag
                 }
 
                 Set<Integer>   indexParams      = new HashSet<>();
+                Set<Integer>   nullableParams   = new HashSet<>();
                 Annotation[][] paramAnnotations = method.getParameterAnnotations();
                 for (int i = 0; i < paramAnnotations.length; ++i) {
                     for (int j = 0; j < paramAnnotations[i].length; ++j) {
-                        if (paramAnnotations[i][j].annotationType() == Index.class) {
+                        Annotation ann = paramAnnotations[i][j];
+                        if (ann.annotationType() == Index.class) {
                             indexParams.add(i);
+                        } else if (ann.annotationType() == Nullable.class) {
+                            nullableParams.add(i);
                         }
                     }
                 }
+                boolean nullableMethod = method.isAnnotationPresent(Nullable.class);
 
                 boolean broadcast = method.isAnnotationPresent(Broadcast.class);
                 if (broadcast) {
@@ -247,7 +266,7 @@ public abstract class InternalServiceManagerImpl implements InternalServiceManag
 
                 BiConsumer[] writers = new BiConsumer[parameterTypes.length];
                 for (int i = 0; i < parameterTypes.length; ++i) {
-                    writers[i] = BufferSerializer.getInstance().getWriter(parameterTypes[i]);
+                    writers[i] = BufferSerializer.getInstance().getWriter(parameterTypes[i], nullableParams.contains(i));
                 }
                 if (returnType == void.class) {
                     return args -> {
@@ -258,7 +277,7 @@ public abstract class InternalServiceManagerImpl implements InternalServiceManag
                     };
                 } else if (isVoidCompletionStage(returnType)) {
                     returnType = ((ParameterizedType) returnType).getActualTypeArguments()[0];
-                    Function<Buffer, Object> reader = BufferSerializer.getInstance().getReader(returnType);
+                    Function<Buffer, Object> reader = BufferSerializer.getInstance().getReader(returnType, nullableMethod);
                     return args -> {
                         CompletableFuture   future    = new CompletableFuture();
                         byte[]              arguments = serializeArguments(args, writers);
@@ -281,7 +300,7 @@ public abstract class InternalServiceManagerImpl implements InternalServiceManag
                         return future;
                     };
                 } else {
-                    Function<Buffer, Object> reader = BufferSerializer.getInstance().getReader(returnType);
+                    Function<Buffer, Object> reader = BufferSerializer.getInstance().getReader(returnType, nullableMethod);
                     return args -> {
                         byte[]              arguments = serializeArguments(args, writers);
                         RpcInvocationPacket packet    = new RpcInvocationPacket(serviceIdentifier, methodIdentifier, calculateIndex(indexParams, args), broadcast, arguments);

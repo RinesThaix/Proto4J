@@ -9,8 +9,8 @@ import java.util.function.Function;
  */
 public interface Serializer<B> {
 
-    <T> BiConsumer<B, T> getWriter(Type type);
+    <T> BiConsumer<B, T> getWriter(Type type, boolean nullable);
 
-    <T> Function<B, T> getReader(Type type);
+    <T> Function<B, T> getReader(Type type, boolean nullable);
 
 }

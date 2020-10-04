@@ -49,7 +49,7 @@ public class RpcTest {
 
         Assert.assertSame(36, svc.sumList(Lists.newArrayList(1, 2, 3, 4, 5, 6, 7, 8)));
 
-        Assert.assertArrayEquals(new long[]{5, 0, 2, 4, 7, 10}, svc.plusOne(new long[]{4, -1, 1, 3, 6, 9}));
+        Assert.assertArrayEquals(null, svc.plusOne(new long[]{4, -1, 1, 3, 6, 9}));
 
         RpcClientPerformer performer2 = new RpcClientPerformer(2, 2);
         performer2.connect(LOCALHOST, PORT).toCompletableFuture().get();

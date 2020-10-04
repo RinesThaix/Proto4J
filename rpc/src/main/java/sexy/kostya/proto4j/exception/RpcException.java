@@ -18,13 +18,18 @@ public class RpcException extends Proto4jException implements BufferSerializable
     public RpcException(int code, String message) {
         super(message);
         this.code = code;
-        this.message = message;
+        this.message = "Code " + code + ": " + message;
     }
 
     public RpcException(int code, Throwable cause) {
         super(cause);
         this.code = code;
-        this.message = cause.getMessage();
+        String message = cause.getMessage();
+        if (message == null) {
+            this.message = "Code " + code;
+        } else {
+            this.message = "Code " + code + ": " + message;
+        }
     }
 
     public int getCode() {

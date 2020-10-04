@@ -61,7 +61,7 @@ public class TestServiceImpl implements TestService {
         for (int i = 0; i < in.length; ++i) {
             in[i]++;
         }
-        return in;
+        return null;
     }
 
     @Override
