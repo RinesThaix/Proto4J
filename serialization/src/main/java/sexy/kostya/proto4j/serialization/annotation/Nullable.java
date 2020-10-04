@@ -9,6 +9,6 @@ import java.lang.annotation.Target;
  * Created by k.shandurenko on 02.10.2020
  */
 @Retention(RetentionPolicy.RUNTIME)
-@Target({ElementType.FIELD, ElementType.PARAMETER, ElementType.METHOD})
+@Target({ElementType.FIELD, ElementType.PARAMETER, ElementType.METHOD, ElementType.TYPE_USE})
 public @interface Nullable {
 }

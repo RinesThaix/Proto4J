@@ -2,6 +2,7 @@ package sexy.kostya.proto4j.rpc;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import sexy.kostya.proto4j.serialization.annotation.Nullable;
 
 import java.util.List;
 import java.util.Set;
@@ -76,8 +77,16 @@ public class TestServiceImpl implements TestService {
     }
 
     @Override
-    public int sumOfAges(Set<Set<TestData>> datas) {
-        return datas.stream().mapToInt(ds -> ds.stream().mapToInt(TestData::getAge).sum()).sum();
+    public int sumOfAges(Set<Set<@Nullable TestData>> datas) {
+        int sum = 0;
+        for (Set<TestData> set : datas) {
+            for (TestData data : set) {
+                if (data != null) {
+                    sum += data.getAge();
+                }
+            }
+        }
+        return sum;
     }
 
     @Override

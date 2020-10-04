@@ -34,7 +34,7 @@ public interface TestService {
     @Broadcast
     CompletionStage<Void> broadcastTest(boolean val);
 
-    int sumOfAges(Set<Set<TestData>> datas);
+    int sumOfAges(Set<Set<@Nullable TestData>> datas);
 
     int sumOfAges2(Set<Set<AutoTestData>> datas);
 

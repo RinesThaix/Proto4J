@@ -73,7 +73,8 @@ public class RpcTest {
                 Sets.newHashSet(
                         new TestData("Adam", "55555", 20),
                         new TestData("Emma", "artificial99", 36),
-                        new TestData("Octavius", "heart&me", 45)),
+                        new TestData("Octavius", "heart&me", 45),
+                        null),
                 Sets.newHashSet(
                         new TestData("Boris", "99percentVodka", 20),
                         new TestData("Donald", "I_AM_TRUMP", 35),

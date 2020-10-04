@@ -75,10 +75,10 @@ public abstract class InternalServiceManagerImpl implements InternalServiceManag
                     continue;
                 }
                 try {
-                    Method method         = serviceInterface.getDeclaredMethod(m.getName(), m.getParameterTypes());
-                    Type   returnType     = method.getGenericReturnType();
-                    Type[] parameterTypes = method.getGenericParameterTypes();
-                    int    methodIdentifier;
+                    Method          method         = serviceInterface.getDeclaredMethod(m.getName(), m.getParameterTypes());
+                    AnnotatedType   returnType     = method.getAnnotatedReturnType();
+                    AnnotatedType[] parameterTypes = method.getAnnotatedParameterTypes();
+                    int             methodIdentifier;
                     if (method.isAnnotationPresent(MethodIdentifier.class)) {
                         MethodIdentifier methodAnnotation = method.getAnnotation(MethodIdentifier.class);
                         if (methodAnnotation.value() == 0) {
@@ -89,32 +89,24 @@ public abstract class InternalServiceManagerImpl implements InternalServiceManag
                         methodIdentifier = hash(method);
                     }
 
-                    Set<Integer>   nullableParams   = new HashSet<>();
-                    Annotation[][] paramAnnotations = method.getParameterAnnotations();
-                    for (int i = 0; i < paramAnnotations.length; ++i) {
-                        for (int j = 0; j < paramAnnotations[i].length; ++j) {
-                            Annotation ann = paramAnnotations[i][j];
-                            if (ann.annotationType() == Nullable.class) {
-                                nullableParams.add(i);
-                            }
-                        }
-                    }
                     boolean nullableMethod = method.isAnnotationPresent(Nullable.class);
 
                     Function[] readers = new Function[parameterTypes.length];
                     for (int i = 0; i < parameterTypes.length; ++i) {
-                        readers[i] = BufferSerializer.getInstance().getReader(parameterTypes[i], nullableParams.contains(i));
+                        readers[i] = BufferSerializer.getInstance().getReader(parameterTypes[i]);
                     }
                     Function<Object[], Object>                invocation = getMethodInvocation(implementation, method);
                     Function<byte[], CompletionStage<byte[]>> func;
-                    if (returnType == void.class) {
+                    if (returnType.getType() == void.class) {
                         func = bytes -> {
                             invocation.apply(deserializeArguments(bytes, readers));
                             return null;
                         };
-                    } else if (isVoidCompletionStage(returnType)) {
-                        returnType = ((ParameterizedType) returnType).getActualTypeArguments()[0];
-                        BiConsumer<Buffer, Object> writer = BufferSerializer.getInstance().getWriter(returnType, nullableMethod);
+                    } else if (isCompletionStage(returnType.getType())) {
+                        if (nullableMethod) {
+                            throw new Proto4jProxyingException("Method with CompletionStage as a return type can't be @Nullable");
+                        }
+                        BiConsumer<Buffer, Object> writer = BufferSerializer.getInstance().getWriter(((AnnotatedParameterizedType) returnType).getAnnotatedActualTypeArguments()[0]);
                         func = bytes -> {
                             Object[]                  args   = deserializeArguments(bytes, readers);
                             CompletableFuture<byte[]> result = new CompletableFuture<>();
@@ -136,10 +128,11 @@ public abstract class InternalServiceManagerImpl implements InternalServiceManag
                             return result;
                         };
                     } else {
-                        if (returnType instanceof Class) {
-                            returnType = Primitives.wrap((Class) returnType);
+                        Type realReturnType = returnType.getType();
+                        if (realReturnType instanceof Class) {
+                            realReturnType = Primitives.wrap((Class) realReturnType);
                         }
-                        BiConsumer<Buffer, Object> writer = BufferSerializer.getInstance().getWriter(returnType, nullableMethod);
+                        BiConsumer<Buffer, Object> writer = BufferSerializer.getInstance().getWriter(realReturnType, nullableMethod);
                         func = bytes -> {
                             Object[] args = deserializeArguments(bytes, readers);
                             try (Buffer buffer = Buffer.newBuffer()) {
@@ -226,8 +219,8 @@ public abstract class InternalServiceManagerImpl implements InternalServiceManag
                         throw new Proto4jProxyingException("Could not invoke default method", ex);
                     }
                 }
-                Type   returnType     = method.getGenericReturnType();
-                Type[] parameterTypes = method.getGenericParameterTypes();
+                AnnotatedType   returnType     = method.getAnnotatedReturnType();
+                AnnotatedType[] parameterTypes = method.getAnnotatedParameterTypes();
                 int    methodIdentifier;
                 if (method.isAnnotationPresent(MethodIdentifier.class)) {
                     MethodIdentifier methodAnnotation = method.getAnnotation(MethodIdentifier.class);
@@ -243,15 +236,11 @@ public abstract class InternalServiceManagerImpl implements InternalServiceManag
                 }
 
                 Set<Integer>   indexParams      = new HashSet<>();
-                Set<Integer>   nullableParams   = new HashSet<>();
                 Annotation[][] paramAnnotations = method.getParameterAnnotations();
                 for (int i = 0; i < paramAnnotations.length; ++i) {
                     for (int j = 0; j < paramAnnotations[i].length; ++j) {
-                        Annotation ann = paramAnnotations[i][j];
-                        if (ann.annotationType() == Index.class) {
+                        if (paramAnnotations[i][j].annotationType() == Index.class) {
                             indexParams.add(i);
-                        } else if (ann.annotationType() == Nullable.class) {
-                            nullableParams.add(i);
                         }
                     }
                 }
@@ -259,25 +248,24 @@ public abstract class InternalServiceManagerImpl implements InternalServiceManag
 
                 boolean broadcast = method.isAnnotationPresent(Broadcast.class);
                 if (broadcast) {
-                    if (returnType != void.class && !isVoidCompletionStage(returnType)) {
+                    if (returnType.getType() != void.class && !isCompletionStage(returnType.getType())) {
                         throw new Proto4jProxyingException("Method " + clazz.getSimpleName() + "#" + method.getName() + " is marked with @Broadcast: it must return void or CompletionStage<Void>");
                     }
                 }
 
                 BiConsumer[] writers = new BiConsumer[parameterTypes.length];
                 for (int i = 0; i < parameterTypes.length; ++i) {
-                    writers[i] = BufferSerializer.getInstance().getWriter(parameterTypes[i], nullableParams.contains(i));
+                    writers[i] = BufferSerializer.getInstance().getWriter(parameterTypes[i]);
                 }
-                if (returnType == void.class) {
+                if (returnType.getType() == void.class) {
                     return args -> {
                         byte[]              arguments = serializeArguments(args, writers);
                         RpcInvocationPacket packet    = new RpcInvocationPacket(serviceIdentifier, methodIdentifier, calculateIndex(indexParams, args), broadcast, arguments);
                         send(packet);
                         return null;
                     };
-                } else if (isVoidCompletionStage(returnType)) {
-                    returnType = ((ParameterizedType) returnType).getActualTypeArguments()[0];
-                    Function<Buffer, Object> reader = BufferSerializer.getInstance().getReader(returnType, nullableMethod);
+                } else if (isCompletionStage(returnType.getType())) {
+                    Function<Buffer, Object> reader = BufferSerializer.getInstance().getReader(((AnnotatedParameterizedType) returnType).getAnnotatedActualTypeArguments()[0]);
                     return args -> {
                         CompletableFuture   future    = new CompletableFuture();
                         byte[]              arguments = serializeArguments(args, writers);
@@ -300,7 +288,7 @@ public abstract class InternalServiceManagerImpl implements InternalServiceManag
                         return future;
                     };
                 } else {
-                    Function<Buffer, Object> reader = BufferSerializer.getInstance().getReader(returnType, nullableMethod);
+                    Function<Buffer, Object> reader = BufferSerializer.getInstance().getReader(returnType.getType(), nullableMethod);
                     return args -> {
                         byte[]              arguments = serializeArguments(args, writers);
                         RpcInvocationPacket packet    = new RpcInvocationPacket(serviceIdentifier, methodIdentifier, calculateIndex(indexParams, args), broadcast, arguments);
@@ -339,16 +327,22 @@ public abstract class InternalServiceManagerImpl implements InternalServiceManag
                 writers[i].accept(buffer, args[i]);
             }
             return ((BufferImpl) buffer).getHandle().array();
+        } catch (Throwable t) {
+            throw new RuntimeException("Could not perform serialization");
         }
     }
 
     @SuppressWarnings("unchecked")
     private Object[] deserializeArguments(byte[] array, Function[] readers) {
         Object[] result = new Object[readers.length];
-        try (Buffer buffer = Buffer.wrap(array)) {
-            for (int i = 0; i < result.length; ++i) {
-                result[i] = readers[i].apply(buffer);
+        try {
+            try (Buffer buffer = Buffer.wrap(array)) {
+                for (int i = 0; i < result.length; ++i) {
+                    result[i] = readers[i].apply(buffer);
+                }
             }
+        } catch (Throwable t) {
+            throw new RuntimeException("Could not perform serialization");
         }
         return result;
     }
@@ -365,7 +359,7 @@ public abstract class InternalServiceManagerImpl implements InternalServiceManag
         return result;
     }
 
-    private boolean isVoidCompletionStage(Type type) {
+    private boolean isCompletionStage(Type type) {
         return type instanceof ParameterizedType && ((ParameterizedType) type).getRawType() == CompletionStage.class;
     }
 
@@ -404,7 +398,7 @@ public abstract class InternalServiceManagerImpl implements InternalServiceManag
                 System.arraycopy(args, 0, realArgs, 1, args.length);
                 return handle.invokeWithArguments(realArgs);
             } catch (Throwable throwable) {
-                throw new RuntimeException(throwable.getMessage());
+                throw new RuntimeException(throwable);
             }
         };
     }
