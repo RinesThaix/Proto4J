@@ -163,7 +163,7 @@ method with [`@MethodIdentifier`](./rpc/src/main/java/sexy/kostya/proto4j/rpc/se
 #### Implementation
 
 When you already created a service interface, now create it's implementation and register it
-using [`RpcClient`](./rpc/src/main/java/sexy/kostya/proto4j/rpc/transport/RpcClient.java)`#getServiceManager()#registerService(Class<S>, I)`.
+using [`RpcClient`](./rpc/src/main/java/sexy/kostya/proto4j/rpc/transport/RpcClient.java)`#getServiceManager().registerService(Class<S>, I)`.
 
 Common scenario is having service interface on two sets of clients yet having the implementation
 on only one of them.
