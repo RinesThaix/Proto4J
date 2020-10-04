@@ -45,23 +45,27 @@ public abstract class Proto4jServer<C extends Channel> extends Proto4jSocket<C> 
         Thread thread = new Thread(() -> {
             getLogger().info("Listening on {}:{}", address, port);
             future.complete(null);
-            try {
-                while (true) {
-                    byte[]         array  = new byte[DatagramHelper.MAX_DATAGRAM_SIZE];
-                    DatagramPacket packet = new DatagramPacket(array, array.length);
+            while (super.socket != null) {
+                byte[]         array  = new byte[DatagramHelper.MAX_DATAGRAM_SIZE];
+                DatagramPacket packet = new DatagramPacket(array, array.length);
+                try {
                     super.socket.receive(packet);
                     getWorkers().execute(() -> {
-                        ByteBuf buffer  = Unpooled.wrappedBuffer(packet.getData(), packet.getOffset(), packet.getLength());
-                        C       channel = this.channel.get(new InetSocketAddress(packet.getAddress(), packet.getPort()));
+                        ByteBuf           buffer  = Unpooled.wrappedBuffer(packet.getData(), packet.getOffset(), packet.getLength());
+                        InetSocketAddress addr    = new InetSocketAddress(packet.getAddress(), packet.getPort());
+                        C                 channel = this.channel.get(addr);
+                        DatagramHelper.log(getLogger(), buffer, addr);
                         try {
                             channel.recv(Buffer.wrap(buffer));
                         } catch (Throwable t) {
-                            t.printStackTrace();
+                            getLogger().error("Could not receive packet", t);
                         }
                     });
+                } catch (IOException e) {
+                    if (super.socket != null) {
+                        getLogger().error("Could not receive datagram", e);
+                    }
                 }
-            } catch (IOException e) {
-                getLogger().error("Could not receive datagram", e);
             }
         }, "Proto4j Server Thread");
         thread.start();

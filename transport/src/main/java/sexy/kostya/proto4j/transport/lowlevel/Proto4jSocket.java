@@ -25,7 +25,7 @@ public abstract class Proto4jSocket<C extends Channel> {
     private final Executor workers;
     private final Executor handlers;
 
-    private final Thread shutdownHook;
+    protected final Thread shutdownHook;
 
     private BiConsumer<C, Proto4jPacket> initialPacketHandler;
 
@@ -61,9 +61,11 @@ public abstract class Proto4jSocket<C extends Channel> {
     }
 
     protected boolean shutdownInternally() {
-        if (this.socket != null) {
-            this.socket.close();
-            this.socket = null;
+        DatagramSocket socket = this.socket;
+        this.socket = null;
+        if (socket != null) {
+            getLogger().info("Shutting down");
+            socket.close();
             return true;
         }
         return false;

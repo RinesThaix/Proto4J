@@ -1,8 +1,10 @@
 package sexy.kostya.proto4j.transport.util;
 
 import io.netty.buffer.ByteBuf;
+import org.slf4j.Logger;
 import sexy.kostya.proto4j.commons.Proto4jProperties;
 
+import java.net.InetSocketAddress;
 import java.util.zip.CRC32;
 
 /**
@@ -41,13 +43,13 @@ public class DatagramHelper {
         return (int) crc32.getValue();
     }
 
-    public static void log(String prefix, ByteBuf buffer) {
+    public static void log(Logger logger, ByteBuf buffer, InetSocketAddress addr) {
         StringBuilder sb    = new StringBuilder();
         int           index = buffer.readerIndex();
         while (buffer.readableBytes() > 0) {
             sb.append(String.format("0x%02X ", buffer.readByte()));
         }
-        System.out.println(prefix + sb.toString().trim());
+        logger.trace("Received {} from {}", sb.toString().trim(), addr);
         buffer.readerIndex(index);
     }
 

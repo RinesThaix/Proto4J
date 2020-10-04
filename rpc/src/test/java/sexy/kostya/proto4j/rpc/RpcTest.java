@@ -19,7 +19,7 @@ import java.util.concurrent.ExecutionException;
 public class RpcTest {
 
     private final static String LOCALHOST = "127.0.0.1";
-    private final static int PORT = 6775;
+    private final static int    PORT      = 6775;
 
     @Test
     public void testBase() throws ExecutionException, InterruptedException {
@@ -124,8 +124,7 @@ public class RpcTest {
     }
 
     @Test
-    public void testConclaveServers() throws ExecutionException, InterruptedException {
-        System.setProperty("proto4j.conclaveTimeout", "100");
+    public void testConclaveServers() throws Throwable {
         List<InetSocketAddress> serversAddresses = Lists.newArrayList(
                 new InetSocketAddress(LOCALHOST, PORT),
                 new InetSocketAddress(LOCALHOST, PORT + 1)
@@ -158,7 +157,10 @@ public class RpcTest {
             svc.testException().toCompletableFuture().get();
             Assert.fail();
         } catch (ExecutionException ex) {
-            Assert.assertEquals(RpcException.Code.EXECUTION_EXCEPTION, ((RpcException) ex.getCause()).getCode());
+            Throwable cause = ex.getCause();
+            if (!(cause instanceof RpcException) || ((RpcException) cause).getCode() != RpcException.Code.EXECUTION_EXCEPTION) {
+                throw ex;
+            }
         } catch (Throwable t) {
             throw t;
         }
@@ -172,7 +174,6 @@ public class RpcTest {
 
     @Test
     public void testConclaveFull() throws ExecutionException, InterruptedException {
-        System.setProperty("proto4j.conclaveTimeout", "100");
         List<InetSocketAddress> serversAddresses = Lists.newArrayList(
                 new InetSocketAddress(LOCALHOST, PORT),
                 new InetSocketAddress(LOCALHOST, PORT + 1)

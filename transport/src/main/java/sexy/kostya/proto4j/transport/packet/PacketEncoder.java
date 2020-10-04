@@ -10,6 +10,7 @@ import sexy.kostya.proto4j.transport.util.DatagramHelper;
 
 import java.io.IOException;
 import java.net.DatagramPacket;
+import java.net.DatagramSocket;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -113,7 +114,11 @@ public class PacketEncoder {
     void send(byte[] array) {
         DatagramPacket packet = new DatagramPacket(array, array.length, this.codec.getAddress());
         try {
-            this.codec.getSocket().send(packet);
+            DatagramSocket socket = this.codec.getSocket();
+            if (socket.isClosed()) {
+                return;
+            }
+            socket.send(packet);
         } catch (IOException e) {
             throw new Proto4jException("Could not send packet", e);
         }

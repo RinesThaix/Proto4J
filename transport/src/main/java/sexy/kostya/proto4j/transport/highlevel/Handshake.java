@@ -4,6 +4,8 @@ import sexy.kostya.proto4j.exception.Proto4jHandshakingException;
 import sexy.kostya.proto4j.transport.Channel;
 import sexy.kostya.proto4j.transport.buffer.Buffer;
 
+import java.util.concurrent.CompletionStage;
+
 /**
  * Created by k.shandurenko on 30.09.2020
  */
@@ -21,7 +23,7 @@ public class Handshake {
         channel.send(buffer);
     }
 
-    public static boolean processOnClientside(Channel channel, Buffer in) {
+    public static boolean processOnClientside(Channel channel, Buffer in, CompletionStage<Void> completed) {
         long first  = in.readLong();
         long second = in.readLong();
         if (first == MAGIC) {
@@ -37,7 +39,7 @@ public class Handshake {
             Buffer out = Buffer.newBuffer(16);
             out.writeLong(serverTime);
             out.writeLong(MAGIC);
-            channel.send(out);
+            completed.thenAccept(v -> channel.send(out));
             return false;
         } else if (second == MAGIC) {
             Long serverTime = channel.getAttributes().remove(ATTRIBUTE_KEY);
@@ -53,7 +55,7 @@ public class Handshake {
         }
     }
 
-    public static boolean processOnServerside(Channel channel, Buffer in) {
+    public static boolean processOnServerside(Channel channel, Buffer in, CompletionStage<Void> completed) {
         long first  = in.readLong();
         long second = in.readLong();
         if (first == MAGIC) {
@@ -63,7 +65,7 @@ public class Handshake {
             out.writeLong(second);
             out.writeLong(time);
             channel.getAttributes().set(ATTRIBUTE_KEY, time);
-            channel.send(out);
+            completed.thenAccept(v -> channel.send(out));
             return false;
         } else if (second == MAGIC) {
             Long serverTime = channel.getAttributes().remove(ATTRIBUTE_KEY);
@@ -76,7 +78,7 @@ public class Handshake {
             Buffer out = Buffer.newBuffer(16);
             out.writeLong(serverTime);
             out.writeLong(MAGIC);
-            channel.send(out);
+            completed.thenAccept(v -> channel.send(out));
             return true;
         } else {
             throw new Proto4jHandshakingException("Not a handshaking packet");

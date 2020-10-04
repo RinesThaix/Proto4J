@@ -26,10 +26,10 @@ public class PacketDecoder {
         this.codec = codec;
     }
 
-    public void read(Buffer buffer, Proto4jPacketHandler handler) {
+    public boolean read(Buffer buffer, Proto4jPacketHandler handler) {
         if (buffer.readableBytes() < 2) {
             buffer.release();
-            return;
+            return false;
         }
         BufferImpl bufferImpl      = (BufferImpl) buffer;
         ByteBuf    handle          = bufferImpl.getHandle();
@@ -37,12 +37,12 @@ public class PacketDecoder {
         short      length          = buffer.readShort();
         if (length != buffer.readableBytes() + 2) {
             buffer.release();
-            return;
+            return false;
         }
         int sequenceNumber = buffer.readInt();
         if (!DatagramHelper.isValidSequenceNumber(sequenceNumber)) {
             buffer.release();
-            return;
+            return false;
         }
         byte flags = buffer.readByte();
         length = (short) (buffer.readableBytes() - 4); // length of the body
@@ -52,12 +52,12 @@ public class PacketDecoder {
         if ((flags & Proto4jPacket.Flag.UNSIGNED_BODY) == 0) {
             if (crc != DatagramHelper.crc32(handle.array(), initialPosition, length + DatagramHelper.HEADER_LENGTH)) {
                 buffer.release();
-                return;
+                return false;
             }
         } else {
             if (crc != DatagramHelper.crc32(handle.array(), initialPosition, DatagramHelper.HEADER_LENGTH)) {
                 buffer.release();
-                return;
+                return false;
             }
         }
         handle.resetReaderIndex();
@@ -72,7 +72,7 @@ public class PacketDecoder {
                 this.codec.getReliabilityChecker().remove(sequenceNumber);
             }
             buffer.release();
-            return;
+            return true;
         }
 
         if ((flags & Proto4jPacket.Flag.PARTIAL) != 0) {
@@ -84,11 +84,11 @@ public class PacketDecoder {
             this.codec.getEncoder().writeConfirmationPartite(sequenceNumber, index);
             if (part.containsKey(index)) {
                 buffer.release();
-                return;
+                return true;
             }
             part.put(index, buffer);
             if (part.size() < total) {
-                return;
+                return true;
             }
             int sumLength = 0;
             for (short i = 0; i < total; ++i) {
@@ -116,13 +116,14 @@ public class PacketDecoder {
         Proto4jPacket packet = new Proto4jPacket(sequenceNumber, flags, buffer);
         if ((flags & Proto4jPacket.Flag.UNORDERED) != 0) {
             handle(packet, handler);
-            return;
+            return true;
         }
         if (this.sequence.get() == sequenceNumber) {
             handle(packet, handler);
         } else {
             this.order.put(sequenceNumber, packet);
         }
+        return true;
     }
 
     private void handle(Proto4jPacket packet, Proto4jPacketHandler handler) {

@@ -22,7 +22,7 @@ public class NamedThreadFactory implements ThreadFactory {
     public Thread newThread(Runnable r) {
         Thread thread = new Thread(r);
         thread.setDaemon(this.daemon);
-        thread.setName(this.name + this.counter.getAndIncrement());
+        thread.setName(this.name + " #" + this.counter.getAndIncrement());
         return thread;
     }
 

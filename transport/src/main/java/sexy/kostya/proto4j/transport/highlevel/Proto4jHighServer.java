@@ -2,7 +2,6 @@ package sexy.kostya.proto4j.transport.highlevel;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import sexy.kostya.proto4j.commons.Proto4jException;
 import sexy.kostya.proto4j.commons.Proto4jProperties;
 import sexy.kostya.proto4j.transport.highlevel.packet.CallbackProto4jPacket;
 import sexy.kostya.proto4j.transport.highlevel.packet.EnumeratedProto4jPacket;
@@ -17,6 +16,9 @@ import sexy.kostya.proto4j.transport.packet.Proto4jPacket;
 import java.net.InetSocketAddress;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 /**
@@ -33,24 +35,27 @@ public abstract class Proto4jHighServer<C extends HighChannel> extends Proto4jSe
     public Proto4jHighServer(Logger logger, int workerThreads, int handlerThreads) {
         super(logger, workerThreads, handlerThreads);
         super.setInitialPacketHandler((channel, packet) -> {
-            if (Handshake.processOnServerside(channel, packet.getBuffer())) {
+            CompletableFuture<Void> completed = new CompletableFuture<>();
+            if (Handshake.processOnServerside(channel, packet.getBuffer(), completed)) {
                 channel.handshaked = true;
                 channel.setHandler(getHandlers(), p -> {
                     EnumeratedProto4jPacket enumeratedPacket = this.packetManager.readPacket(p.getBuffer());
+                    getLogger().trace("Received {} from {}", enumeratedPacket.getClass().getSimpleName(), channel.getCodec().getAddress());
                     switch (enumeratedPacket.getID()) {
                         case Packet1Ping.ID:
                             // nothing is here
                             break;
                         case Packet2Disconnect.ID:
-                            disconnect(channel, false, null, null);
+                            Packet2Disconnect casted = (Packet2Disconnect) enumeratedPacket;
+                            if (handleCallbackPacket(casted)) {
+                                break;
+                            }
+                            disconnect(channel, casted, null, null);
                             break;
                         default:
                             if (enumeratedPacket instanceof CallbackProto4jPacket) {
-                                CallbackProto4jPacket casted = (CallbackProto4jPacket) enumeratedPacket;
-                                if (casted.getCallbackID() < 0) {
-                                    casted.setCallbackID((short) -casted.getCallbackID());
-                                    this.callbacksRegistry.responded(casted);
-                                    return;
+                                if (handleCallbackPacket((CallbackProto4jPacket) enumeratedPacket)) {
+                                    break;
                                 }
                             }
                             this.packetHandler.handle(channel, enumeratedPacket);
@@ -58,11 +63,8 @@ public abstract class Proto4jHighServer<C extends HighChannel> extends Proto4jSe
                     }
                 });
             }
+            completed.complete(null);
         });
-    }
-
-    public Proto4jHighServer(int workerThreads, int handlerThreads) {
-        this(LoggerFactory.getLogger("Proto4j HighServer"), workerThreads, handlerThreads);
         long receivedTimeout = Proto4jProperties.getProperty("highTimeout", 10_000L);
         long pingDelay       = Proto4jProperties.getProperty("highPingDelay", 1_000L);
         Thread thread = new Thread(() -> {
@@ -70,11 +72,11 @@ public abstract class Proto4jHighServer<C extends HighChannel> extends Proto4jSe
             while (true) {
                 long current = System.currentTimeMillis();
                 super.channel.getAll().values().forEach(channel -> {
-                    if (!channel.isHandshaked()) {
+                    if (!channel.isHandshaked() || !channel.isActive()) {
                         return;
                     }
                     if (current - channel.getLastPacketReceived() > receivedTimeout) {
-                        disconnect(channel, true, "Timed out", toBeRemoved);
+                        disconnect(channel, null, "Timed out", toBeRemoved);
                         return;
                     }
                     if (current - channel.getLastPacketReceived() > pingDelay || current - channel.getLastPacketSent() > pingDelay) {
@@ -91,6 +93,19 @@ public abstract class Proto4jHighServer<C extends HighChannel> extends Proto4jSe
         }, "Proto4j Ping Thread");
         thread.setDaemon(true);
         thread.start();
+    }
+
+    public Proto4jHighServer(int workerThreads, int handlerThreads) {
+        this(LoggerFactory.getLogger("Proto4j HighServer"), workerThreads, handlerThreads);
+    }
+
+    private boolean handleCallbackPacket(CallbackProto4jPacket packet) {
+        if (packet.getCallbackID() < 0) {
+            packet.setCallbackID((short) -packet.getCallbackID());
+            this.callbacksRegistry.responded(packet);
+            return true;
+        }
+        return false;
     }
 
     public void setPacketManager(PacketManager packetManager) {
@@ -137,11 +152,23 @@ public abstract class Proto4jHighServer<C extends HighChannel> extends Proto4jSe
 
     @Override
     protected boolean shutdownInternally() {
-        super.channel.getAll().values().forEach(channel -> {
+        CompletionStage<Void> disconnection = null;
+        for (C channel : super.channel.getAll().values()) {
+            CompletionStage<CallbackProto4jPacket> stage = channel.sendWithCallback(new Packet2Disconnect("Server is stopping"));
+            if (disconnection == null) {
+                disconnection = stage.thenAccept(p -> {
+                });
+            } else {
+                disconnection = disconnection.thenAcceptBoth(stage, (v, p) -> {
+                });
+            }
+        }
+        if (disconnection != null) {
             try {
-                channel.send(new Packet2Disconnect("Server is stopping"), Proto4jPacket.Flag.UNRELIABLE);
-            } catch (Proto4jException ignored) {}
-        });
+                disconnection.toCompletableFuture().get(HighChannel.INITIAL_DELAY, TimeUnit.MILLISECONDS);
+            } catch (Exception ignored) {
+            }
+        }
         if (!super.shutdownInternally()) {
             return false;
         }
@@ -150,15 +177,17 @@ public abstract class Proto4jHighServer<C extends HighChannel> extends Proto4jSe
     }
 
     public void disconnect(C channel, String reason) {
-        disconnect(channel, true, reason, null);
+        disconnect(channel, null, reason, null);
     }
 
-    private void disconnect(C channel, boolean callback, String reason, Set<InetSocketAddress> toBeRemoved) {
+    private void disconnect(C channel, Packet2Disconnect callback, String reason, Set<InetSocketAddress> toBeRemoved) {
         if (this.onDisconnect != null) {
             this.onDisconnect.accept(channel);
         }
-        if (callback) {
-            channel.send(new Packet2Disconnect(reason));
+        if (callback == null) {
+            channel.send(new Packet2Disconnect(reason), Proto4jPacket.Flag.UNRELIABLE);
+        } else {
+            callback.respond(channel, callback, Proto4jPacket.Flag.UNRELIABLE);
         }
         channel.active = false;
         if (toBeRemoved != null) {

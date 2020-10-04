@@ -54,10 +54,10 @@ public abstract class Proto4jClient<C extends Channel> extends Proto4jSocket<C> 
         Thread thread = new Thread(() -> {
             getLogger().info("Started the client");
             future.complete(null);
-            try {
-                while (true) {
-                    byte[]         array  = new byte[DatagramHelper.MAX_DATAGRAM_SIZE];
-                    DatagramPacket packet = new DatagramPacket(array, array.length);
+            while (super.socket != null) {
+                byte[]         array  = new byte[DatagramHelper.MAX_DATAGRAM_SIZE];
+                DatagramPacket packet = new DatagramPacket(array, array.length);
+                try {
                     super.socket.receive(packet);
                     getWorkers().execute(() -> {
                         ByteBuf           buffer = Unpooled.wrappedBuffer(packet.getData(), packet.getOffset(), packet.getLength());
@@ -66,15 +66,18 @@ public abstract class Proto4jClient<C extends Channel> extends Proto4jSocket<C> 
                             getLogger().warn("Received packet from an unknown address: {}", addr);
                             return;
                         }
+                        DatagramHelper.log(getLogger(), buffer, addr);
                         try {
                             this.channel.recv(Buffer.wrap(buffer));
                         } catch (Throwable t) {
-                            t.printStackTrace();
+                            getLogger().error("Could not receive packet", t);
                         }
                     });
+                } catch (IOException e) {
+                    if (super.socket != null) {
+                        getLogger().error("Could not receive datagram", e);
+                    }
                 }
-            } catch (IOException e) {
-                getLogger().error("Could not receive datagram", e);
             }
         }, "Proto4j Client Thread");
         thread.start();

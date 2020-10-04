@@ -12,12 +12,11 @@ import sexy.kostya.proto4j.rpc.transport.packet.RpcServicePacket;
 import sexy.kostya.proto4j.transport.highlevel.Proto4jHighClient;
 import sexy.kostya.proto4j.transport.highlevel.Proto4jHighServer;
 import sexy.kostya.proto4j.transport.highlevel.packet.PacketHandler;
+import sexy.kostya.proto4j.transport.lowlevel.Proto4jSocket;
 import sexy.kostya.proto4j.transport.packet.PacketCodec;
 
 import java.net.InetSocketAddress;
-import java.util.List;
-import java.util.Map;
-import java.util.Random;
+import java.util.*;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
@@ -33,6 +32,8 @@ public class RpcConclaveServer extends Proto4jHighServer<ConclaveChannel> {
 
     private final List<InetSocketAddress>      allServersAddresses;
     private final ConclaveServerServiceManager serviceManager;
+
+    private final Set<RpcConclaveServerClient> clients = new HashSet<>();
 
     public RpcConclaveServer(List<InetSocketAddress> allServersAddresses, int workerThreads, int handlerThreads) {
         super(LoggerFactory.getLogger("RpcConclaveServer"), workerThreads, handlerThreads);
@@ -52,8 +53,13 @@ public class RpcConclaveServer extends Proto4jHighServer<ConclaveChannel> {
                     packet.respond(channel, packet);
                 });
                 register(RpcServerPacket.class, (channel, packet) -> {
+                    if (channel.isServer()) {
+                        disconnect(channel, "Already registered as a server");
+                        return;
+                    }
                     channel.setServer(true);
                     serviceManager.addServer(channel);
+                    packet.respond(channel, packet);
                 });
                 register(RpcServiceNotificationPacket.class, (channel, packet) -> serviceManager.serviceRegistered(channel, packet.getChannelID(), packet.getServiceID()));
                 register(RpcDisconnectNotificationPacket.class, (channel, packet) -> serviceManager.channelUnregistered(channel, packet.getChannelID()));
@@ -80,6 +86,7 @@ public class RpcConclaveServer extends Proto4jHighServer<ConclaveChannel> {
                 );
                 try {
                     client.start(addr.getHostName(), addr.getPort()).toCompletableFuture().get(Proto4jProperties.getProperty("conclaveTimeout", 1000L), TimeUnit.MILLISECONDS);
+                    this.clients.add(client);
                 } catch (Exception ignored) {
                     client.shutdown();
                 }
@@ -107,20 +114,30 @@ public class RpcConclaveServer extends Proto4jHighServer<ConclaveChannel> {
         return this.channels.get(id);
     }
 
+    @Override
+    protected boolean shutdownInternally() {
+        if (!super.shutdownInternally()) {
+            return false;
+        }
+        this.clients.forEach(Proto4jSocket::shutdown);
+        return true;
+    }
+
     private class RpcConclaveServerClient extends Proto4jHighClient<ConclaveChannel> {
 
         public RpcConclaveServerClient(int workerThreads, int handlerThreads) {
-            super(LoggerFactory.getLogger("RpcConclaveServerClient"), workerThreads, handlerThreads);
+            super(LoggerFactory.getLogger("RpcConclaveServerClient"), workerThreads, handlerThreads, RpcConclaveServer.this.getCallbacksRegistry());
             setPacketManager(RpcConclaveServer.this.getPacketManager());
             setPacketHandler(RpcConclaveServer.this.getPacketHandler());
         }
 
         @Override
         public CompletionStage<Void> start(String address, int port) {
-            return super.start(address, port).thenAccept(v -> {
-                getChannel().setServer(true);
-                serviceManager.addServer(getChannel());
-                getChannel().send(new RpcServerPacket());
+            return super.start(address, port).thenCompose(v -> {
+                ConclaveChannel channel = getChannel();
+                channel.setServer(true);
+                serviceManager.addServer(channel);
+                return channel.sendWithCallback(new RpcServerPacket()).thenApply(p -> v);
             });
         }
 
@@ -132,12 +149,13 @@ public class RpcConclaveServer extends Proto4jHighServer<ConclaveChannel> {
         @Override
         protected boolean shutdownInternally() {
             ConclaveChannel channel = getChannel();
-            if (channel != null) {
-                serviceManager.unregister(channel);
-                serviceManager.removeServer(channel);
-                channels.remove(channel.getId());
+            if (channel == null) {
+                return false;
             }
-            return super.shutdownInternally();
+            super.shutdownInternally();
+            serviceManager.removeServer(channel);
+            channels.remove(channel.getId());
+            return true;
         }
 
     }

@@ -17,7 +17,7 @@ import java.util.concurrent.TimeUnit;
  */
 public class HighChannel extends Channel {
 
-    private final static long INITIAL_DELAY = Proto4jProperties.getProperty("callbacksInitialDelay", 500L);
+    public final static long INITIAL_DELAY = Proto4jProperties.getProperty("callbacksInitialDelay", 500L);
 
     private final CallbacksRegistry callbacksRegistry;
 
@@ -48,9 +48,9 @@ public class HighChannel extends Channel {
     }
 
     @Override
-    public void recv(Buffer buffer) {
+    public boolean recv(Buffer buffer) {
         this.lastPacketReceived = System.currentTimeMillis();
-        super.recv(buffer);
+        return super.recv(buffer);
     }
 
     @Override

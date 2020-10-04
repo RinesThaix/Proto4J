@@ -1,5 +1,8 @@
 package sexy.kostya.proto4j.rpc;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -11,7 +14,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class TestServiceImpl implements TestService {
 
-    private AtomicInteger value = new AtomicInteger();
+    private final Logger        logger = LoggerFactory.getLogger(TestService.class);
+    private       AtomicInteger value  = new AtomicInteger();
 
     @Override
     public void set(int a, int b) {
@@ -79,13 +83,13 @@ public class TestServiceImpl implements TestService {
     @Override
     public int sumOfAges2(Set<Set<AutoTestData>> datas) {
         AutoTestData data = datas.iterator().next().iterator().next();
-        System.out.println(data);
+        this.logger.info("Printing from sumOfAges2: {}", data);
         return datas.stream().mapToInt(ds -> ds.stream().mapToInt(AutoTestData::getAge).sum()).sum();
     }
 
     @Override
     public void print(AutoTestDataExtended data) {
-        System.out.println(data);
+        this.logger.info("Printing {}", data);
     }
 
     @Override

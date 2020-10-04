@@ -1,12 +1,12 @@
 package sexy.kostya.proto4j.transport.highlevel.packet.def;
 
 import sexy.kostya.proto4j.transport.buffer.Buffer;
-import sexy.kostya.proto4j.transport.highlevel.packet.EnumeratedProto4jPacket;
+import sexy.kostya.proto4j.transport.highlevel.packet.CallbackProto4jPacket;
 
 /**
  * Created by k.shandurenko on 01.10.2020
  */
-public class Packet2Disconnect extends EnumeratedProto4jPacket {
+public class Packet2Disconnect extends CallbackProto4jPacket {
 
     public final static int ID = -2;
 

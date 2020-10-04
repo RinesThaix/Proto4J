@@ -28,7 +28,6 @@ public abstract class Proto4jPacketHandler {
             try {
                 handle(packet);
             } catch (Exception e) {
-                e.printStackTrace();
                 LOGGER.warn("Packet handling caught an exception", e);
             } finally {
                 finalizer.run();

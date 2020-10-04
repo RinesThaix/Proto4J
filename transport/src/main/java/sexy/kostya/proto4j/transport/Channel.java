@@ -35,8 +35,12 @@ public class Channel {
         };
     }
 
-    public void recv(Buffer buffer) {
-        this.codec.getDecoder().read(buffer, this.handler);
+    public Proto4jPacketHandler getHandler() {
+        return this.handler;
+    }
+
+    public boolean recv(Buffer buffer) {
+        return this.codec.getDecoder().read(buffer, this.handler);
     }
 
     public void send(Buffer buffer) {

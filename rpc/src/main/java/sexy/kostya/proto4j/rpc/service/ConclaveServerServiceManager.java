@@ -79,7 +79,7 @@ public class ConclaveServerServiceManager extends BaseServiceManager<ConclaveCha
                 List<Integer> list = data.implementations.get(serviceID);
                 Preconditions.checkNotNull(list);
                 synchronized (list) {
-                    list.remove(channelID);
+                    list.remove((Integer) channelID);
                     if (list.isEmpty()) {
                         data.implementations.remove(serviceID);
                     }
@@ -99,13 +99,13 @@ public class ConclaveServerServiceManager extends BaseServiceManager<ConclaveCha
     public void register(ConclaveChannel channel, int serviceID) {
         int channelID = channel.getId();
         serviceRegistered(this.self, channelID, serviceID);
-        broadcast(new RpcServiceNotificationPacket(channel.getId(), serviceID));
+        broadcast(null, new RpcServiceNotificationPacket(channel.getId(), serviceID));
     }
 
     public void unregister(ConclaveChannel channel) {
         int channelID = channel.getId();
         channelUnregistered(this.self, channelID);
-        broadcast(new RpcDisconnectNotificationPacket(channel.getId()));
+        broadcast(channel, new RpcDisconnectNotificationPacket(channel.getId()));
     }
 
     @Override
@@ -281,8 +281,8 @@ public class ConclaveServerServiceManager extends BaseServiceManager<ConclaveCha
         }
     }
 
-    private void broadcast(EnumeratedProto4jPacket packet) {
-        this.servers.keySet().stream().filter(channel -> channel.getId() != 0).forEach(channel -> channel.send(packet));
+    private void broadcast(ConclaveChannel ignored, EnumeratedProto4jPacket packet) {
+        this.servers.keySet().stream().filter(channel -> channel.getId() != 0 && channel != ignored).forEach(channel -> channel.send(packet));
     }
 
     private RpcConclaveServer getServer() {

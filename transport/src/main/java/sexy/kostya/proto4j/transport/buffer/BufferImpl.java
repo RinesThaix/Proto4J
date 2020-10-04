@@ -32,15 +32,7 @@ public class BufferImpl implements Buffer {
 
     @Override
     public byte readByte() {
-        try {
-            return this.buffer.readByte();
-        } catch (Exception ex) {
-            if (before != null) {
-                before.printStackTrace();
-                ex.printStackTrace();
-            }
-            return 0;
-        }
+        return this.buffer.readByte();
     }
 
     @Override
@@ -88,16 +80,8 @@ public class BufferImpl implements Buffer {
         this.buffer.writeLong(value);
     }
 
-    private Throwable before;
-
     @Override
     public void release() {
-        if (this.buffer == null) {
-            before.printStackTrace();
-            throw new NullPointerException("Now");
-        } else {
-            before = new Exception("Before");
-        }
         this.buffer.release();
         this.buffer = null;
         RECYCLER.recycle(this);
