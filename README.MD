@@ -40,7 +40,7 @@ All UDP packets that are being sent are of the following structure:
    1. **Length**: 2 bytes
    2. **Flags**: 1 byte
    3. **Sequence number**: 4 bytes
-2. **Body**: [*Length*] bytes
+2. **Body**: *Variable length*
 3. **Signature**: 4 bytes
 
 #### Flags
