@@ -104,7 +104,7 @@ way you want. This can be done by sending the initial packet using [`HighChannel
 ### System properties
 
 The following is a list of system properties which can be used to
-affect the way modules behave internally. All of time values are in specified in milliseconds.
+affect the way modules behave internally. All of time values are specified in milliseconds.
 
 | Name                             | Default value   | Description                                                  |
 | -------------------------------- | --------------- | ------------------------------------------------------------ |
@@ -118,7 +118,7 @@ affect the way modules behave internally. All of time values are in specified in
 
 ## [RPC](./rpc/)
 
-This is a higher-level API over *High level* one. Instead of manually implementing packets and their handling you work via services.
+This is a higher-level API over *High level* one. Instead of manually implementing packets and their handling you work via services.
 
 To start working with it use [`RpcServer`](./rpc/src/main/java/sexy/kostya/proto4j/rpc/transport/RpcServer.java) and [`RpcClient`](./rpc/src/main/java/sexy/kostya/proto4j/rpc/transport/RpcClient.java).
 
