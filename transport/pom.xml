@@ -37,7 +37,7 @@
         <dependency>
             <groupId>io.netty</groupId>
             <artifactId>netty-buffer</artifactId>
-            <version>4.1.52.Final</version>
+            <version>4.1.57.Final</version>
         </dependency>
         <dependency>
             <groupId>sexy.kostya.proto4j</groupId>
