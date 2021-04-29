@@ -1,0 +1,15 @@
+version: 2
+updates:
+- package-ecosystem: maven
+  directory: "/"
+  schedule:
+    interval: daily
+    time: "02:00"
+  open-pull-requests-limit: 10
+  ignore:
+  - dependency-name: io.netty:netty-buffer
+    versions:
+    - 4.1.58.Final
+    - 4.1.59.Final
+    - 4.1.60.Final
+    - 4.1.62.Final
